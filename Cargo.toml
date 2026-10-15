@@ -1,0 +1,165 @@
+# =============================================================================
+# ktu — workspace (2.ª tentativa)
+# Regra de ouro: simplicidade primeiro; uma fase não abre antes de a anterior
+# fechar verde. Os níveis de lint vivem em `[workspace.lints]`; os valores de
+# configuração do Clippy vivem em `clippy.toml` (já no repo).
+# Ponto de partida dos lints: `REF/knudge` (D92), adaptado.
+# =============================================================================
+
+[workspace]
+resolver = "3"
+members = [
+    "crates/ktu-core",
+    "crates/ktu-tools",
+    "crates/ktu-provider",
+    "crates/ktu-port",
+    "crates/ktu-memory",
+    "crates/ktu-cli",
+    "xtask",
+]
+# `REF/` é material de referência (não faz parte do workspace ktu); excluí-lo
+# evita que o workspace aninhado do `knudge` seja absorvido pelo ktu.
+exclude = ["REF"]
+default-members = ["crates/ktu-cli"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+# núcleo puro
+thiserror = "2"
+indexmap = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# assíncrono (dois runtimes current_thread — §2.2)
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "net", "io-util", "process"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+async-trait = "0.1"
+# HTTP do provider built-in (§2.5) — sem TLS (llama-server é local)
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+# CLI / logs
+clap = { version = "4", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+# dev
+proptest = "1"
+
+# crates do workspace
+ktu-core = { path = "crates/ktu-core" }
+ktu-tools = { path = "crates/ktu-tools" }
+ktu-provider = { path = "crates/ktu-provider" }
+ktu-port = { path = "crates/ktu-port" }
+ktu-memory = { path = "crates/ktu-memory" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+unused_qualifications = "deny"
+unused_lifetimes = "deny"
+elided_lifetimes_in_paths = "deny"
+single_use_lifetimes = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+unreachable_pub = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+let_underscore_drop = "deny"
+macro_use_extern_crate = "deny"
+meta_variable_misuse = "deny"
+non_ascii_idents = "deny"
+noop_method_call = "deny"
+unused_import_braces = "deny"
+variant_size_differences = "warn"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+
+[workspace.lints.clippy]
+# Grupos (prioridade menor para permitir overrides pontuais)
+all = { level = "deny", priority = -1 }
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+style = { level = "deny", priority = -1 }
+complexity = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+
+# Restriction curada (I7: nada de unwrap/expect/panic em src/)
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+exit = "deny"
+mem_forget = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "warn"
+as_conversions = "deny"
+cast_possible_truncation = "deny"
+cast_sign_loss = "deny"
+cast_possible_wrap = "deny"
+cast_precision_loss = "warn"
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+let_underscore_must_use = "deny"
+let_underscore_untyped = "warn"
+absolute_paths = "warn"
+wildcard_imports = "deny"
+fn_params_excessive_bools = "deny"
+struct_excessive_bools = "deny"
+disallowed_fields = "deny"
+disallowed_macros = "deny"
+disallowed_methods = "deny"
+disallowed_names = "deny"
+disallowed_types = "deny"
+await_holding_lock = "deny"
+await_holding_refcell_ref = "deny"
+allow_attributes_without_reason = "deny"
+
+# Tamanho / perf
+large_enum_variant = "deny"
+result_large_err = "warn"
+large_types_passed_by_value = "warn"
+large_stack_arrays = "deny"
+large_stack_frames = "warn"
+large_futures = "warn"
+
+# Ruidosas: abrimos mão (mesma lista do knudge)
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+implicit_hasher = "allow"
+multiple_crate_versions = "allow"
+min_ident_chars = "allow"
+many_single_char_names = "allow"
+missing_docs_in_private_items = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+allow_attributes = "allow"
+option_if_let_else = "allow"
+significant_drop_tightening = "allow"
+missing_const_for_fn = "allow"
+excessive_nesting = "allow"
+redundant_pub_crate = "allow"
+
+# Documentação
+missing_safety_doc = "warn"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+overflow-checks = true
+panic = "abort"
+
+[profile.dev]
+debug-assertions = true
+overflow-checks = true

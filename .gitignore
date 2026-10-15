@@ -22,3 +22,15 @@ rustc-ice-*.txt
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+# katu — gerido (início)
+.katu/audit/
+.katu/trash/
+.katu/log/
+# katu — gerido (fim)
+
+# ktu — runtime (efémero/operacional; reconstruível). O conhecimento versiona-se em .agents/.
+/.ktu/
+
+# modelos GGUF (multi-GB; descarregados por scripts/setup-model.sh)
+/models/
+models/

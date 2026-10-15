@@ -1,0 +1,10 @@
+data: {"choices":[{"delta":{"reasoning_content":"penso"}}]}
+
+data: {"choices":[{"delta":{"content":"Ola "}}]}
+
+data: {"choices":[{"delta":{"content":"mundo"}}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"read_file","arguments":"{\"path\":\"a\"}"}}]}}]}
+
+data: [DONE]
+
