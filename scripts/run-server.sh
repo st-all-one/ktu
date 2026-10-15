@@ -9,7 +9,7 @@ MODEL="${1:-${KTU_MODEL_PATH:-$ROOT/models/Ornith-1.5-9B-${QUANT}.gguf}}"
 SERVER="${KTU_LLAMA_SERVER:-$ROOT/.ktu/llama.cpp/build/bin/llama-server}"
 CTX="${KTU_CTX:-32768}"
 HOST="${KTU_HOST:-127.0.0.1}"
-PORT="${KTU_PORT:-8080}"
+PORT="${KTU_PORT:-43111}"
 
 if [ ! -f "$MODEL" ]; then
   echo "erro: modelo inexistente: $MODEL (corra ./scripts/setup-model.sh)" >&2

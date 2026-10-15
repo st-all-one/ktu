@@ -70,8 +70,8 @@ struct WireRequest<'a> {
     messages: Vec<WireMessage<'a>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tools: Vec<WireTool<'a>>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    tool_choice: Vec<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<&'static str>,
     stream: bool,
     #[serde(flatten)]
     sampling: WireSampling,
@@ -97,11 +97,7 @@ pub fn request_body(
     }
     messages.extend(request.messages.iter().map(message_wire));
     let tools: Vec<WireTool<'_>> = request.tools.iter().map(tool_wire).collect();
-    let tool_choice = if tools.is_empty() {
-        Vec::new()
-    } else {
-        vec!["auto"]
-    };
+    let tool_choice = if tools.is_empty() { None } else { Some("auto") };
     let body = WireRequest {
         model,
         messages,
@@ -277,5 +273,6 @@ mod tests {
             body.pointer("/tools/0/function/name"),
             Some(&serde_json::json!("read_file"))
         );
+        assert_eq!(body.get("tool_choice"), Some(&serde_json::json!("auto")));
     }
 }

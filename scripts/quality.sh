@@ -13,6 +13,9 @@ cd "$ROOT"
 
 PROFILE="${KTU_PROFILE:-debug}"
 KTU_BIN="$ROOT/target/$PROFILE/ktu"
+# URL do llama-server: KTU_BASE_URL (ou porta em KTU_PORT). Permite conviver
+# com outro servidor já a ocupar o 8080 (ex.: katu-dev).
+BASE_URL="${KTU_BASE_URL:-http://127.0.0.1:${KTU_PORT:-43111}}"
 
 if [ "${KTU_SKIP_BUILD:-0}" != "1" ]; then
   if [ "$PROFILE" = "release" ]; then
@@ -22,4 +25,4 @@ if [ "${KTU_SKIP_BUILD:-0}" != "1" ]; then
   fi
 fi
 
-exec cargo run -q -p xtask -- quality --ktu "$KTU_BIN" "$@"
+exec cargo run -q -p xtask -- quality --ktu "$KTU_BIN" --base-url "$BASE_URL" "$@"
