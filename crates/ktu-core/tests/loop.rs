@@ -258,11 +258,19 @@ async fn distinct_calls_exhaust_the_step_cap() {
 #[derive(Default)]
 struct CountingMemory {
     queries: Mutex<Vec<String>>,
+    drafts: Mutex<Vec<String>>,
 }
 
 impl CountingMemory {
     fn queries(&self) -> Vec<String> {
         self.queries
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    fn drafts(&self) -> Vec<String> {
+        self.drafts
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone()
@@ -278,7 +286,11 @@ impl Memory for CountingMemory {
         Ok(vec![Hint::new("fact_01", "ha memoria relevante", 0.9)])
     }
 
-    fn write(&self, _draft: &MemoryDraft) -> MemoryResult<MemoryWrite> {
+    fn write(&self, draft: &MemoryDraft) -> MemoryResult<MemoryWrite> {
+        self.drafts
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(draft.statement.clone());
         Ok(MemoryWrite::Created {
             id: "fact_01".to_owned(),
         })
@@ -345,6 +357,48 @@ async fn memory_is_recalled_only_at_session_start() {
         .filter(|record| record.event == events::MEMORY_RECALL)
         .count();
     assert_eq!(recalls, 1);
+}
+
+#[tokio::test]
+async fn memory_is_written_automatically_at_turn_end() {
+    let provider = FakeProvider::new(vec![Completion {
+        text: "a resposta final do turno".to_owned(),
+        reasoning: String::new(),
+        tool_calls: Vec::new(),
+    }]);
+    let executor = tools(&[], Vec::new());
+    let guard = read_guard();
+    let budget = BudgetGate::new(100_000);
+    let logger = RecordingLogger::new();
+    let metrics = NoopMetrics;
+    let clock = FixedClock::new(Timestamp::from_millis(0));
+    let cancel = CancelToken::new();
+    let memory = CountingMemory::default();
+    let deps = Deps {
+        provider: &provider,
+        tools: &executor,
+        guard: &guard,
+        budget: &budget,
+        logger: &logger,
+        metrics: &metrics,
+        clock: &clock,
+        cancel: &cancel,
+        memory: Some(&memory),
+    };
+    let mut log = SessionLog::new();
+
+    let reason = run_turn(&mut log, &deps, "sys", "faz algo", &LoopConfig::default()).await;
+    assert_eq!(reason, StopReason::EndTurn);
+    assert_eq!(
+        memory.drafts(),
+        vec!["a resposta final do turno".to_owned()]
+    );
+    let writes = logger
+        .snapshot()
+        .into_iter()
+        .filter(|record| record.event == events::MEMORY_WRITE)
+        .count();
+    assert_eq!(writes, 1);
 }
 
 #[tokio::test]

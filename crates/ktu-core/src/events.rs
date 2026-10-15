@@ -28,6 +28,8 @@ pub const GUARD_DECISION: &str = "guard.decision";
 pub const KERNEL_ERROR: &str = "kernel.error";
 /// Memória recordada no arranque de sessão (`hints` são ponteiros).
 pub const MEMORY_RECALL: &str = "memory.recall";
+/// Escrita automática de memória no fim do turno (gatilho `session_end`).
+pub const MEMORY_WRITE: &str = "memory.write";
 /// Contexto compactado (resumo dos turnos antigos) — `compacted: true`.
 pub const SESSION_COMPACT: &str = "session.compact";
 
@@ -45,5 +47,6 @@ pub const ALL: &[&str] = &[
     GUARD_DECISION,
     KERNEL_ERROR,
     MEMORY_RECALL,
+    MEMORY_WRITE,
     SESSION_COMPACT,
 ];

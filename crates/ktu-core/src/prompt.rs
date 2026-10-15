@@ -3,7 +3,9 @@
 /// Base do agente (identidade e disciplina).
 pub const BASE: &str = "Es o ktu, um agente de programação. Trabalhas em passos: usa as tools para \
 ler e alterar ficheiros e apresenta o teu raciocínio de forma concisa. Nunca inventes resultados: \
-baseia-te no que as tools devolvem.";
+baseia-te no que as tools devolvem. Mantém memória durável do projeto: consulta `memory_ask` \
+antes de decidir e grava cada aprendizado com `memory_write` — uma afirmação por nota, com \
+`kind`, `tags` e `anchors` quando aplicáveis. É a memória que sobrevive entre sessões.";
 
 /// Compõe o system prompt: `base` + `AGENTS.md` condensado (se houver).
 #[must_use]
@@ -63,6 +65,12 @@ pub fn condense(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{BASE, compose, condense};
+
+    #[test]
+    fn base_mentions_memory_discipline() {
+        assert!(BASE.contains("memory_write"));
+        assert!(BASE.contains("memory_ask"));
+    }
 
     #[test]
     fn condense_drops_html_comments() {

@@ -19,6 +19,7 @@ pub use doctor::{DoctorReport, Probe, diagnose};
 pub use gguf::GgufMeta;
 pub use llama::{DEFAULT_BASE_URL, LlamaConfig, LlamaProvider};
 pub use sampling::{ReasoningEffort, Sampling};
+pub use wire::Flavor;
 
 /// Nome canónico do crate (usado em logs estruturados).
 pub const CRATE: &str = "ktu-provider";

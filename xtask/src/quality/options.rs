@@ -29,6 +29,8 @@ pub(super) struct Options {
     pub(super) output: PathBuf,
     /// Diretório de onde se leem as perguntas (`wiki/quality_test`).
     pub(super) questions: PathBuf,
+    /// Espaço de trabalho isolado do sujeito.
+    pub(super) work: PathBuf,
     /// Subconjunto de questões a correr (`p1,p2`).
     pub(super) only: Vec<String>,
     /// Só imprime o plano, sem correr o modelo.
@@ -46,9 +48,10 @@ impl Options {
             model: "ornith".to_owned(),
             effort: "xhigh".to_owned(),
             base_url: "http://127.0.0.1:8080".to_owned(),
-            max_steps: "24".to_owned(),
+            max_steps: "60".to_owned(),
             output: PathBuf::from("wiki/quality_test"),
             questions: PathBuf::from("wiki/quality_test"),
+            work: PathBuf::from(".ktu/quality/ktu"),
             only: Vec::new(),
             dry_run: false,
         }
@@ -73,6 +76,7 @@ impl Options {
                 "--max-steps" => options.max_steps = value(&mut iter, flag)?,
                 "--output" => options.output = PathBuf::from(value(&mut iter, flag)?),
                 "--questions" => options.questions = PathBuf::from(value(&mut iter, flag)?),
+                "--work" => options.work = PathBuf::from(value(&mut iter, flag)?),
                 "--only" => options.only = split_keys(&value(&mut iter, flag)?),
                 "--dry-run" => options.dry_run = true,
                 other => return Err(format!("opcao desconhecida: {other}")),

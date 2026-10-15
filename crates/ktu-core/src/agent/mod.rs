@@ -21,7 +21,7 @@ use crate::tools::{ToolExecutor, ToolOutcome};
 use support::{
     Stagnation, augment_with_memory, decision_reason, log_event, log_guard_decision,
     log_kernel_error, log_model_output, log_model_request, log_provider_error, log_tool_call,
-    log_tool_result, reason_str, resolve_synthetic, signature,
+    log_tool_result, reason_str, record_session_end, resolve_synthetic, signature,
 };
 
 /// Configuração do loop.
@@ -100,6 +100,7 @@ pub async fn run_turn(
         "turno terminado",
         &[("reason", reason_str(reason))],
     );
+    record_session_end(deps, log, reason);
     reason
 }
 

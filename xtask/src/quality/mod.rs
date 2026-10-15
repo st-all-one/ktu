@@ -10,10 +10,11 @@ mod exec;
 mod frontmatter;
 mod options;
 mod plan;
+mod workspace;
 
 use std::io::{self, Write};
 
-use exec::{MemoryBackup, run_battery, write_plan};
+use exec::{run_battery, write_plan};
 use options::Options;
 use plan::{Question, Step};
 
@@ -45,15 +46,14 @@ fn load_questions(options: &Options) -> Result<Vec<Question>, String> {
     Ok(questions)
 }
 
-/// Executa a bateria isolando a memória e restaurando-a no fim.
+/// Executa a bateria com isolamento: prepara o espaço, corre e arquiva.
 fn execute(
     out: &mut dyn Write,
     options: &Options,
     questions: &[Question],
     steps: &[Step],
 ) -> Result<(), String> {
-    let backup = MemoryBackup::new(&options.root)?;
-    let result = run_battery(out, options, questions, steps);
-    let restored = backup.restore();
-    result.and(restored)
+    workspace::prepare(&options.root, &options.work)?;
+    run_battery(out, options, questions, steps)?;
+    workspace::archive(&options.work, &options.output, &options.subject)
 }

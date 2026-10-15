@@ -42,3 +42,26 @@ pub struct MetricsSnapshot {
     /// Contadores acumulados, por nome.
     pub counters: BTreeMap<String, u64>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::MetricsSnapshot;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn snapshot_serialises_to_golden_json() {
+        let mut snapshot = MetricsSnapshot {
+            durations_micros: BTreeMap::new(),
+            counters: BTreeMap::new(),
+        };
+        snapshot
+            .durations_micros
+            .insert("derive_messages".to_owned(), vec![12]);
+        snapshot.counters.insert("calls".to_owned(), 3);
+        let json = serde_json::to_string(&snapshot).unwrap_or_default();
+        assert_eq!(
+            json,
+            r#"{"durations_micros":{"derive_messages":[12]},"counters":{"calls":3}}"#
+        );
+    }
+}

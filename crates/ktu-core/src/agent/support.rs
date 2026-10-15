@@ -3,7 +3,7 @@
 use crate::domain::{Completion, StopReason, ToolCall};
 use crate::events;
 use crate::guard::Decision;
-use crate::memory::compose_hints;
+use crate::memory::{MemoryDraft, MemoryKind, compose_hints};
 use crate::ports::{Level, LogRecord};
 use crate::provider::ProviderError;
 use crate::session::{Event, SessionLog};
@@ -213,4 +213,81 @@ pub(super) fn augment_with_memory(
         &[("hints", count.as_str())],
     );
     Some(format!("{system}\n\n{}", compose_hints(&hints)))
+}
+
+/// Máximo de escalares numa afirmação (contrato do `knudge`: ≤ 120).
+const MAX_STATEMENT_SCALARS: usize = 120;
+
+/// Gatilho `session_end`: grava **automaticamente** uma nota `meta` com o desfecho do turno.
+///
+/// Cumpre §2.7/§2.12: a persistência **não** depende de o modelo escolher chamar a
+/// tool; falhas degradam com um warning (a memória é capacidade acessória, não a
+/// verdade do turno).
+pub(super) fn record_session_end(deps: &Deps<'_>, log: &SessionLog, reason: StopReason) {
+    let Some(memory) = deps.memory else {
+        return;
+    };
+    if !matches!(reason, StopReason::EndTurn) {
+        return;
+    }
+    let Some(answer) = last_answer(log) else {
+        return;
+    };
+    let mut draft = MemoryDraft::new(
+        MemoryKind::Meta,
+        truncate_scalars(answer, MAX_STATEMENT_SCALARS),
+    );
+    answer.clone_into(&mut draft.body);
+    draft.tags = vec!["session".to_owned(), "auto".to_owned()];
+    match memory.write(&draft) {
+        Ok(write) => {
+            let id = write.id().to_owned();
+            let action = write.action();
+            log_event(
+                deps,
+                Level::Info,
+                events::MEMORY_WRITE,
+                "memoria gravada no fim do turno",
+                &[("action", action), ("id", id.as_str())],
+            );
+        }
+        Err(error) => {
+            let message = error.to_string();
+            log_event(
+                deps,
+                Level::Warn,
+                events::KERNEL_ERROR,
+                "falha ao gravar memoria no fim do turno",
+                &[("erro", message.as_str())],
+            );
+        }
+    }
+}
+
+/// Resposta final (texto não vazio) do **turno corrente**, nunca de um anterior.
+fn last_answer(log: &SessionLog) -> Option<&str> {
+    let start = log
+        .events()
+        .iter()
+        .rposition(|event| matches!(event, Event::TurnStart { .. }))
+        .map_or(0, |index| index.saturating_add(1));
+    log.events()
+        .get(start..)?
+        .iter()
+        .rev()
+        .find_map(|event| match event {
+            Event::Assistant { content, .. } if !content.trim().is_empty() => {
+                Some(content.as_str())
+            }
+            _ => None,
+        })
+}
+
+/// Trunca em escalares Unicode, preservando fronteiras de caractere.
+fn truncate_scalars(text: &str, max: usize) -> String {
+    let trimmed = text.trim();
+    if trimmed.chars().count() <= max {
+        return trimmed.to_owned();
+    }
+    trimmed.chars().take(max).collect()
 }

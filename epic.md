@@ -89,51 +89,56 @@ Regras: **buscar antes de gravar** (dedup `0.75`/`0.92`); **ancorar código** (`
 #### G0 — Fundação & método: workspace, portas/DI, logs estruturados, métricas por função, testes
 *knudge:* `task_00qm4eu6`
 
-- [ ] `task_01i0wipl` Criar workspace Rust 2024 com crates ktu-core/tools/provider/port/cli/memory e firewall de camadas (xtask check-layers)
-- [ ] `task_01yiyq91` Fixar lints do repo (clippy.toml/rustfmt.toml) e Makefile check = fmt + clippy -D warnings + test
-- [ ] `task_00ek2v0f` Definir portas com injecção de dependência (Clock/Rng/Fs/Env) com fakes; domínio puro e sem unsafe/unwrap/expect/panic
-- [ ] `task_00mow2ux` Padrão de logs estruturados: stdout=dados, stderr=logs, ids de evento estáveis, custo zero por omissão
-- [ ] `task_00krcevy` Métricas de performance por função (spans zero-cost atrás de feature instrument) com export JSON
-- [ ] `task_017rdmtb` Harness de testes: unit + property + goldens + provider falso com fixtures; CI mínimo
-- [ ] `task_00x02111` ktu init: criar layout .agents/ (skills, guardrails, memory) e .ktu/ (runtime); knudge ja inicializado
+- [x] `task_01i0wipl` Criar workspace Rust 2024 com crates ktu-core/tools/provider/port/cli/memory e firewall de camadas (xtask check-layers)
+- [x] `task_01yiyq91` Fixar lints do repo (clippy.toml/rustfmt.toml) e Makefile check = fmt + clippy -D warnings + test
+- [x] `task_00ek2v0f` Definir portas com injecção de dependência (Clock/Rng/Fs/Env) com fakes; domínio puro e sem unsafe/unwrap/expect/panic
+- [x] `task_00mow2ux` Padrão de logs estruturados: stdout=dados, stderr=logs, ids de evento estáveis, custo zero por omissão
+- [x] `task_00krcevy` Métricas de performance por função (spans zero-cost atrás de feature instrument) com export JSON
+- [x] `task_017rdmtb` Harness de testes: unit + property + goldens + provider falso com fixtures; CI mínimo
+- [x] `task_00x02111` ktu init: criar layout .agents/ (skills, guardrails, memory) e .ktu/ (runtime); knudge ja inicializado
 
 #### G1 — Loop mínimo com sessão e contexto (prova de vida, provider falso)
 *knudge:* `task_01xvduai`
 
-- [ ] `task_00f82mso` Tipos do núcleo (Message/ToolCall/ToolResult/Turn/StopReason) e log JSONL append-only como fonte da verdade
-- [ ] `task_01bfp4a5` derive_messages + projeção de wire (1 passo = 1 assistant com N tool_calls + N tool results)
-- [ ] `task_00o2ycqi` Loop completo: cancelável, StopReason obrigatório, detecção de estagnação (agent.stall)
-- [ ] `task_013gz0iw` Guard estrutural mínimo: capacidade do AgentSpec, confinamento de path, caps; envelope taint (I13)
-- [ ] `task_0118dhru` BudgetGate com dono único + fixar a instrução corrente (I14)
-- [ ] `task_00mabsbe` Provider falso com fixtures: replay determinístico byte-a-byte (I6)
-- [ ] `task_01fzd1u5` Tool read_file + comando ktu run embedded; system prompt composto (base + AGENTS.md condensado)
+- [x] `task_00f82mso` Tipos do núcleo (Message/ToolCall/ToolResult/Turn/StopReason) e log JSONL append-only como fonte da verdade
+- [x] `task_01bfp4a5` derive_messages + projeção de wire (1 passo = 1 assistant com N tool_calls + N tool results)
+- [x] `task_00o2ycqi` Loop completo: cancelável, StopReason obrigatório, detecção de estagnação (agent.stall)
+- [x] `task_013gz0iw` Guard estrutural mínimo: capacidade do AgentSpec, confinamento de path, caps; envelope taint (I13)
+- [x] `task_0118dhru` BudgetGate com dono único + fixar a instrução corrente (I14)
+- [x] `task_00mabsbe` Provider falso com fixtures: replay determinístico byte-a-byte (I6)
+- [x] `task_01fzd1u5` Tool read_file + comando ktu run embedded; system prompt composto (base + AGENTS.md condensado)
+
+> Duplicado removido do plano: `task_012p12rz` (mesma entrega que `task_013gz0iw`).
 
 #### G2 — Agente moderno real: provider llama.cpp, tools de filesystem, sessão e cache
 *knudge:* `task_00sv9qlq`
 
-- [ ] `task_016rvfop` Provider llama.cpp via llama-server (chat/completions streaming SSE, tool-calling nativo + fallback texto)
-- [ ] `task_01j2o6cg` Test double HTTP com fixtures para exercitar streaming/parsing sem modelo real
-- [ ] `task_00si6z5t` Tools de filesystem: read/write/edit/list/glob/grep com erros accionáveis e paths resolvidos no root
-- [ ] `task_01bzrwbx` bash com timeout/cap + análise de argv + retry/backoff do provider
-- [ ] `task_01ptulp8` Sessão: resume por id + cache de prefixo (determinismo de prefixo; não invalidar) + checkpoint
-- [ ] `task_01ma94kf` Trash em vez de apagar (recuperável, com índice) + ktu providers doctor
+- [x] `task_016rvfop` Provider llama.cpp via llama-server (chat/completions streaming SSE, tool-calling nativo + fallback texto)
+- [x] `task_01j2o6cg` Test double HTTP com fixtures para exercitar streaming/parsing sem modelo real
+- [x] `task_00si6z5t` Tools de filesystem: read/write/edit/list/glob/grep com erros accionáveis e paths resolvidos no root
+- [x] `task_01bzrwbx` bash com timeout/cap + análise de argv + retry/backoff do provider
+- [x] `task_01ptulp8` Sessão: resume por id + cache de prefixo (determinismo de prefixo; não invalidar) + checkpoint
+- [x] `task_01ma94kf` Trash em vez de apagar (recuperável, com índice) + ktu providers doctor
+- [x] `task_01chmvy6` Provider: configuracao de sampling do thinking mode e reasoning tratado em campo proprio
+- [x] `task_018qh88b` ktu providers doctor valida o binario do fork PrismML e o ficheiro ternary antes de servir
+- [x] `task_01xdbyx0` Preparar o modelo Ornith-1.5-9B-GGUF Q4_K_M e arrancar o llama-server stock (CPU, -c 32768)
 
 #### G3 — Memória knudge & persistência (sessão a sessão)
 *knudge:* `task_01iz1xh1`
 
-- [ ] `task_00uz2my4` Validar se knudge-core indexa corpus JSONL; definir schema físico de .agents/memory/notes.jsonl
-- [ ] `task_00c0u0vr` Porta Memory (tipos do ktu) + adaptador knudge-core; hints são ponteiros (id+statement+score), nunca o corpo
-- [ ] `task_00z0ju90` Memory gate no loop: recall de início de sessão + pre_write com dedup idempotente (0.75 cria / merge / rejeita)
-- [ ] `task_01jeruz5` Compactação aditiva + checkpoint tipado durável (temp->fsync->rename) + recuperação de crash
-- [ ] `task_01s1vlkb` ktu memory export --md (vista derivada) + ktu doctor --memory (âncoras quebradas, saúde do índice)
+- [x] `task_00uz2my4` Validar se knudge-core indexa corpus JSONL; definir schema físico de .agents/memory/notes.jsonl
+- [x] `task_00c0u0vr` Porta Memory (tipos do ktu) + adaptador knudge-core; hints são ponteiros (id+statement+score), nunca o corpo
+- [x] `task_00z0ju90` Memory gate no loop: recall de início de sessão + pre_write com dedup idempotente (0.75 cria / merge / rejeita)
+- [x] `task_01jeruz5` Compactação aditiva + checkpoint tipado durável (temp->fsync->rename) + recuperação de crash
+- [x] `task_01s1vlkb` ktu memory export --md (vista derivada) + ktu doctor --memory (âncoras quebradas, saúde do índice)
 
 #### G4 — GATE inegociável: alcançar o quality_test p1-p4 (equivalência + persistência) ⛔ **GATE INEGOCIÁVEL**
 *knudge:* `task_010xrtzt` — **bloqueia G5–G8 até passar.**
 
 - [x] `task_013dfilu` scripts/quality.sh + xtask quality: bateria isolada por sujeito (mesmas perguntas/contexto, sem interferência)
-- [ ] `task_00vq487c` Executar p1-p4 com frontmatter de condições + sonda de persistência entre sessões
-- [ ] `task_00kz804y` Julgar por expected_answer_ideia e arquivar wiki/quality_test/p*/ktu-*.md ao lado dos referenciais
-- [ ] `task_016ifxg0` Repetir até equivalência de grau; BLOQUEIA todas as fases seguintes enquanto não passar
+- [x] `task_00vq487c` Executar p1-p4 com frontmatter de condições + sonda de persistência entre sessões
+- [x] `task_00kz804y` Julgar por expected_answer_ideia e arquivar wiki/quality_test/p*/ktu-*.md ao lado dos referenciais
+- [x] `task_016ifxg0` Repetir até equivalência de grau; BLOQUEIA todas as fases seguintes enquanto não passar
 
 #### G5 — Subagentes read-only (explorer) com fan-out + modo plano
 *knudge:* `task_00j43pma`

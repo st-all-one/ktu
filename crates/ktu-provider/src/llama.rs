@@ -18,7 +18,7 @@ use crate::fallback;
 use crate::sampling::{ReasoningEffort, Sampling};
 use crate::sse::SseFramer;
 use crate::stream::CompletionAccumulator;
-use crate::wire;
+use crate::wire::{self, Flavor};
 
 /// URL por omissão do `llama-server` local.
 pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8080";
@@ -40,6 +40,16 @@ pub struct LlamaConfig {
     pub retry_backoff: Duration,
     /// Tempo limite do pedido.
     pub timeout: Duration,
+    /// Chave do gateway remoto (`Authorization: Bearer`), quando exigida.
+    pub api_key: Option<String>,
+    /// Id de sessão/afinidade enviado nos cabeçalhos (`opencode-go`).
+    pub session: Option<String>,
+    /// Cabeçalho que leva o id de sessão (ex.: `x-opencode-session`).
+    pub session_header: Option<String>,
+    /// Cabeçalhos extra que também levam o id de sessão (afinidade/cache).
+    pub affinity_headers: Vec<String>,
+    /// Dialeto do corpo: extensões do `llama.cpp` ou só campos `OpenAI`.
+    pub flavor: Flavor,
 }
 
 impl LlamaConfig {
@@ -51,9 +61,14 @@ impl LlamaConfig {
             model: model.into(),
             sampling: Sampling::ornith(),
             effort: ReasoningEffort::default(),
-            max_attempts: 3,
-            retry_backoff: Duration::from_millis(250),
+            max_attempts: 4,
+            retry_backoff: Duration::from_secs(1),
             timeout: Duration::from_secs(600),
+            api_key: None,
+            session: None,
+            session_header: None,
+            affinity_headers: Vec::new(),
+            flavor: Flavor::Llama,
         }
     }
 }
@@ -87,10 +102,19 @@ impl LlamaProvider {
         body: &Value,
         cancel: &CancelToken,
     ) -> Result<Completion, ProviderError> {
-        let response = self
-            .client
-            .post(endpoint)
-            .json(body)
+        let mut builder = self.client.post(endpoint).json(body);
+        if let Some(key) = self.config.api_key.as_deref() {
+            builder = builder.bearer_auth(key);
+        }
+        if let Some(session) = self.config.session.as_deref() {
+            if let Some(header) = self.config.session_header.as_deref() {
+                builder = builder.header(header, session);
+            }
+            for header in &self.config.affinity_headers {
+                builder = builder.header(header, session);
+            }
+        }
+        let response = builder
             .send()
             .await
             .map_err(|error| ProviderError::Unavailable(error.to_string()))?;
@@ -98,7 +122,9 @@ impl LlamaProvider {
         if !status.is_success() {
             let detail = response.text().await.unwrap_or_default();
             let message = format!("HTTP {status}: {detail}");
-            return Err(if status.is_server_error() {
+            let retryable =
+                status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS;
+            return Err(if retryable {
                 ProviderError::Unavailable(message)
             } else {
                 ProviderError::Invalid(message)
@@ -117,6 +143,7 @@ impl Provider for LlamaProvider {
             request,
             self.config.sampling,
             self.config.effort,
+            self.config.flavor,
         );
         let endpoint = self.endpoint();
         let attempts = self.config.max_attempts.max(1);

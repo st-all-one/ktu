@@ -2,7 +2,6 @@
 
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::artifact::{self, Conditions, Outcome};
@@ -29,7 +28,7 @@ pub(super) fn run_battery(
         };
         writeln!(out, "\n== {} ({}) ==", question.id, step.key)
             .map_err(|error| io_message(&error))?;
-        let prompt = adapt_prompt(&question.issue, &options.subject);
+        let prompt = adapt_prompt(&step.key, &question.issue, &options.subject);
         let answer = run_step(options, step, &prompt)?;
         let compacted = checkpoint_compacted(options, &step.session);
         let probe = if step.probe {
@@ -96,7 +95,7 @@ fn ktu_command(options: &Options, step: &Step, prompt: &str) -> Command {
     command
         .arg("run")
         .arg("--root")
-        .arg(&options.root)
+        .arg(&options.work)
         .arg("--provider")
         .arg(&options.provider)
         .arg("--base-url")
@@ -109,7 +108,9 @@ fn ktu_command(options: &Options, step: &Step, prompt: &str) -> Command {
         .arg(&options.max_steps)
         .arg("--session")
         .arg(&step.session);
-    if step.chain.resumes() {
+    if step.chain.compacts() {
+        command.arg("--compact");
+    } else if step.chain.resumes() {
         command.arg("--resume");
     }
     command.arg("--").arg(prompt);
@@ -119,7 +120,7 @@ fn ktu_command(options: &Options, step: &Step, prompt: &str) -> Command {
 /// Lê `compacted` do checkpoint da sessão (falso se ausente/ilegível).
 fn checkpoint_compacted(options: &Options, session: &str) -> bool {
     let path = options
-        .root
+        .work
         .join(".ktu")
         .join("sessions")
         .join(format!("{session}.checkpoint.json"));
@@ -141,7 +142,7 @@ fn persistence_probe(options: &Options) -> Result<bool, String> {
         .arg("memory")
         .arg("list")
         .arg("--root")
-        .arg(&options.root)
+        .arg(&options.work)
         .output()
         .map_err(|error| format!("falha ao sondar memoria: {error}"))?;
     let text = String::from_utf8_lossy(&output.stdout);
@@ -185,11 +186,21 @@ fn write_summary(options: &Options, rows: &[Row]) -> Result<(), String> {
 }
 
 /// Reescreve os paths absolutos dos referenciais para paths relativos à raiz.
-fn adapt_prompt(issue: &str, subject: &str) -> String {
-    issue
+///
+/// Para a Q3, fixa o caminho do entregável em `exploration/knudge/<sujeito>/knudge.md`,
+/// que é o que a Q4 procura ao resolver `[agent]` — sem isto, o nome escolhido pelo
+/// modelo varia e a Q4 não encontra a base.
+fn adapt_prompt(key: &str, issue: &str, subject: &str) -> String {
+    let mut adapted = issue
         .replace("[agent]", subject)
         .replace("/REF/", "REF/")
-        .replace("/exploration/", "exploration/")
+        .replace("/exploration/", "exploration/");
+    if key == "p3" {
+        adapted.push_str(" Escreve o resumo exatamente em `exploration/knudge/");
+        adapted.push_str(subject);
+        adapted.push_str("/knudge.md`.");
+    }
+    adapted
 }
 
 /// Mapeia um erro de I/O de `stdout`/`stderr` para mensagem.
@@ -209,44 +220,6 @@ struct Row {
     chars: usize,
 }
 
-/// Guarda a memória do projeto e deixa-a limpa durante a bateria.
-pub(super) struct MemoryBackup {
-    /// Caminho de `notes.jsonl`.
-    path: PathBuf,
-    /// Conteúdo original, se existia.
-    content: Option<String>,
-}
-
-impl MemoryBackup {
-    /// Guarda o conteúdo atual e esvazia `notes.jsonl`.
-    pub(super) fn new(root: &Path) -> Result<Self, String> {
-        let path = root.join(".agents").join("memory").join("notes.jsonl");
-        let content = if path.is_file() {
-            Some(
-                fs::read_to_string(&path)
-                    .map_err(|error| format!("{}: {error}", path.display()))?,
-            )
-        } else {
-            None
-        };
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
-        }
-        fs::write(&path, b"").map_err(|error| format!("{}: {error}", path.display()))?;
-        Ok(Self { path, content })
-    }
-
-    /// Restaura o conteúdo original (ou remove o ficheiro que criou).
-    pub(super) fn restore(self) -> Result<(), String> {
-        match self.content {
-            Some(text) => fs::write(&self.path, text)
-                .map_err(|error| format!("{}: {error}", self.path.display())),
-            None => fs::remove_file(&self.path)
-                .map_err(|error| format!("{}: {error}", self.path.display())),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::adapt_prompt;
@@ -254,10 +227,14 @@ mod tests {
     #[test]
     fn adapt_prompt_relativizes_paths() {
         let text = "resumo de /REF/knudge em /exploration/knudge/[agent]/knudge.md";
-        let adapted = adapt_prompt(text, "ktu");
-        assert_eq!(
-            adapted,
-            "resumo de REF/knudge em exploration/knudge/ktu/knudge.md"
-        );
+        let adapted = adapt_prompt("p4", text, "ktu");
+        assert!(adapted.starts_with("resumo de REF/knudge em exploration/knudge/ktu/knudge.md"));
+        assert!(!adapted.contains("memory_write"));
+    }
+
+    #[test]
+    fn adapt_prompt_pins_q3_deliverable_path() {
+        let adapted = adapt_prompt("p3", "Escreva o resumo em /exploration/knudge", "ktu");
+        assert!(adapted.contains("exploration/knudge/ktu/knudge.md"));
     }
 }

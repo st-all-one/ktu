@@ -8,9 +8,11 @@ mod clock;
 mod init;
 pub(crate) mod logging;
 mod memory_cmd;
+mod provider_defaults;
 mod provider_fake;
 mod providers;
 mod run;
+mod session_mode;
 mod trash_cmd;
 
 use std::env;
@@ -45,15 +47,18 @@ enum Command {
         /// *Root* da sessão (por omissão, o directório actual).
         #[arg(long)]
         root: Option<PathBuf>,
-        /// Provider: `llama` (real) ou `mock` (eco, sem modelo).
+        /// Provider: `llama`, `opencode-go` (remoto) ou `mock` (eco, sem modelo).
         #[arg(long, env = "KTU_PROVIDER", default_value = "llama")]
         provider: String,
-        /// *Base URL* do `llama-server`.
-        #[arg(long, env = "KTU_BASE_URL", default_value = "http://127.0.0.1:8080")]
-        base_url: String,
-        /// Nome/alias do modelo.
-        #[arg(long, env = "KTU_MODEL", default_value = "ornith")]
-        model: String,
+        /// *Base URL* do provider (por omissão, derivada do provider).
+        #[arg(long, env = "KTU_BASE_URL")]
+        base_url: Option<String>,
+        /// Nome/alias do modelo (por omissão, derivado do provider).
+        #[arg(long, env = "KTU_MODEL")]
+        model: Option<String>,
+        /// Chave do gateway remoto (`opencode-go`); por omissão do ambiente.
+        #[arg(long, env = "OPENCODE_GO_API_KEY")]
+        api_key: Option<String>,
         /// Esforço de raciocínio (`low|medium|high|xhigh`).
         #[arg(long, env = "KTU_EFFORT", default_value = "xhigh")]
         effort: String,
@@ -66,6 +71,9 @@ enum Command {
         /// Retoma a sessão (carrega o log) antes deste turno.
         #[arg(long)]
         resume: bool,
+        /// Força a compactação do contexto antes do turno (implica retomar).
+        #[arg(long)]
+        compact: bool,
     },
     /// Diagnostica o provider `llama.cpp` (`llama-server`).
     Providers {
@@ -159,28 +167,7 @@ fn main() -> ExitCode {
 fn dispatch(command: Option<Command>, logger: &logging::TracingLogger) -> ExitCode {
     match command {
         Some(Command::Init) => run_init(),
-        Some(Command::Run {
-            prompt,
-            root,
-            provider,
-            base_url,
-            model,
-            effort,
-            max_steps,
-            session,
-            resume,
-        }) => {
-            let config = run::RunConfig {
-                provider,
-                base_url,
-                model,
-                effort,
-                max_steps,
-                session,
-                resume,
-            };
-            run_command(root, &prompt, &config, logger)
-        }
+        Some(command @ Command::Run { .. }) => dispatch_run(command, logger),
         Some(Command::Providers { action }) => match action {
             ProvidersAction::Doctor {
                 base_url,
@@ -218,6 +205,44 @@ fn dispatch(command: Option<Command>, logger: &logging::TracingLogger) -> ExitCo
 /// Resolve o *root* pedido, caindo para o directório actual.
 fn root_or_cwd(root: Option<PathBuf>) -> PathBuf {
     root.unwrap_or_else(|| env::current_dir().unwrap_or_default())
+}
+
+/// Prepara e corre um turno (`ktu run`) a partir dos argumentos já analisados.
+fn dispatch_run(command: Command, logger: &logging::TracingLogger) -> ExitCode {
+    let Command::Run {
+        prompt,
+        root,
+        provider,
+        base_url,
+        model,
+        api_key,
+        effort,
+        max_steps,
+        session,
+        resume,
+        compact,
+    } = command
+    else {
+        return ExitCode::FAILURE;
+    };
+    let mode = if compact {
+        session_mode::SessionMode::ResumeCompacted
+    } else if resume {
+        session_mode::SessionMode::Resume
+    } else {
+        session_mode::SessionMode::Fresh
+    };
+    let config = run::RunConfig {
+        base_url: base_url.unwrap_or_else(|| provider_defaults::default_base(&provider).to_owned()),
+        model: model.unwrap_or_else(|| provider_defaults::default_model(&provider).to_owned()),
+        provider,
+        api_key,
+        effort,
+        max_steps,
+        session,
+        mode,
+    };
+    run_command(root, &prompt, &config, logger)
 }
 
 /// Corre um turno do agente (`ktu run`).

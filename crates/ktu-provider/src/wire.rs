@@ -52,16 +52,30 @@ struct WireTool<'a> {
 struct WireSampling {
     temperature: f32,
     top_p: f32,
-    top_k: u32,
-    min_p: f32,
-    presence_penalty: f32,
-    repetition_penalty: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    min_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    presence_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repetition_penalty: Option<f32>,
+}
+
+/// Dialeto do corpo: o `llama-server` aceita extensões; um gateway `OpenAI` puro, não.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Flavor {
+    /// Inclui as extensões do llama.cpp (`top_k`, `min_p`, `presence/repetition_penalty`, `reasoning_effort`).
+    Llama,
+    /// Só os campos OpenAI-padrão (gateways remotos toleram mal os extras).
+    OpenAi,
 }
 
 #[derive(Serialize)]
 struct WireTemplateKwargs<'a> {
     enable_thinking: bool,
-    reasoning_effort: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_effort: Option<&'a str>,
 }
 
 #[derive(Serialize)]
@@ -85,7 +99,9 @@ pub fn request_body(
     request: &ProviderRequest,
     sampling: Sampling,
     effort: ReasoningEffort,
+    flavor: Flavor,
 ) -> Value {
+    let llama = flavor == Flavor::Llama;
     let mut messages = Vec::new();
     if !request.system.is_empty() {
         messages.push(WireMessage {
@@ -107,14 +123,14 @@ pub fn request_body(
         sampling: WireSampling {
             temperature: sampling.temperature,
             top_p: sampling.top_p,
-            top_k: sampling.top_k,
-            min_p: sampling.min_p,
-            presence_penalty: sampling.presence_penalty,
-            repetition_penalty: sampling.repetition_penalty,
+            top_k: llama.then_some(sampling.top_k),
+            min_p: llama.then_some(sampling.min_p),
+            presence_penalty: llama.then_some(sampling.presence_penalty),
+            repetition_penalty: llama.then_some(sampling.repetition_penalty),
         },
         chat_template_kwargs: WireTemplateKwargs {
             enable_thinking: true,
-            reasoning_effort: effort.as_str(),
+            reasoning_effort: llama.then_some(effort.as_str()),
         },
     };
     to_value(&body)
@@ -191,88 +207,4 @@ fn tool_wire(spec: &ToolSpec) -> WireTool<'_> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::request_body;
-    use crate::sampling::{ReasoningEffort, Sampling};
-    use ktu_core::cancel::CancelToken;
-    use ktu_core::domain::{Message, ToolCall, ToolCallId, ToolSpec};
-    use ktu_core::provider::ProviderRequest;
-
-    fn request(messages: Vec<Message>, tools: Vec<ToolSpec>) -> ProviderRequest {
-        ProviderRequest {
-            system: "se".to_owned(),
-            messages,
-            tools,
-            cancel: CancelToken::new(),
-        }
-    }
-
-    #[test]
-    fn body_has_system_sampling_and_stream() {
-        let body = request_body(
-            "ornith",
-            &request(
-                vec![Message::User {
-                    content: "ola".to_owned(),
-                }],
-                Vec::new(),
-            ),
-            Sampling::ornith(),
-            ReasoningEffort::Xhigh,
-        );
-        assert_eq!(body.get("stream"), Some(&serde_json::json!(true)));
-        assert_eq!(body.get("top_k"), Some(&serde_json::json!(20)));
-        assert_eq!(
-            body.pointer("/chat_template_kwargs/reasoning_effort"),
-            Some(&serde_json::json!("xhigh"))
-        );
-        let messages = body.get("messages").and_then(|value| value.as_array());
-        assert_eq!(messages.map(Vec::len), Some(2));
-    }
-
-    #[test]
-    fn assistant_tool_calls_use_one_message_with_n_calls() {
-        let body = request_body(
-            "m",
-            &request(
-                vec![Message::Assistant {
-                    content: String::new(),
-                    tool_calls: vec![
-                        ToolCall {
-                            id: ToolCallId::new("a"),
-                            name: "read_file".to_owned(),
-                            arguments: "{}".to_owned(),
-                        },
-                        ToolCall {
-                            id: ToolCallId::new("b"),
-                            name: "read_file".to_owned(),
-                            arguments: "{}".to_owned(),
-                        },
-                    ],
-                }],
-                vec![ToolSpec {
-                    name: "read_file".to_owned(),
-                    description: "le".to_owned(),
-                    parameters: "{\"type\":\"object\"}".to_owned(),
-                }],
-            ),
-            Sampling::ornith(),
-            ReasoningEffort::Medium,
-        );
-        let messages = body
-            .get("messages")
-            .and_then(|value| value.as_array())
-            .map(Vec::len);
-        assert_eq!(messages, Some(2));
-        let calls = body
-            .pointer("/messages/1/tool_calls")
-            .and_then(|value| value.as_array())
-            .map(Vec::len);
-        assert_eq!(calls, Some(2));
-        assert_eq!(
-            body.pointer("/tools/0/function/name"),
-            Some(&serde_json::json!("read_file"))
-        );
-        assert_eq!(body.get("tool_choice"), Some(&serde_json::json!("auto")));
-    }
-}
+mod tests;

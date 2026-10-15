@@ -20,12 +20,13 @@ use ktu_core::provider::Provider;
 use ktu_core::session::{Event, SessionLog};
 use ktu_core::store;
 use ktu_memory::JsonlMemory;
-use ktu_provider::{LlamaConfig, LlamaProvider, ReasoningEffort};
+use ktu_provider::{Flavor, LlamaConfig, LlamaProvider, ReasoningEffort};
 use ktu_tools::{StdFs, Toolbox, tool_names};
 use tokio::runtime::Builder;
 
 use crate::clock::SystemClock;
 use crate::provider_fake::EchoProvider;
+use crate::session_mode::{SessionMode, force_compaction};
 
 /// Configuração do turno vinda da linha de comandos.
 #[derive(Debug, Clone)]
@@ -36,14 +37,16 @@ pub(crate) struct RunConfig {
     pub base_url: String,
     /// Nome/alias do modelo.
     pub model: String,
+    /// Chave do gateway remoto (`opencode-go`), quando exigida.
+    pub api_key: Option<String>,
     /// Esforço de raciocínio (`low|medium|high|xhigh`).
     pub effort: String,
     /// Tecto de passos do turno.
     pub max_steps: u32,
     /// Identificador da sessão persistida.
     pub session: String,
-    /// Retomar a sessão (carregar o log) antes deste turno.
-    pub resume: bool,
+    /// Modo de arranque da sessão (nova, retoma, retoma+compacta).
+    pub mode: SessionMode,
 }
 
 /// Corre um turno e imprime a resposta final em `stdout`.
@@ -65,6 +68,24 @@ fn build_provider(config: &RunConfig) -> Result<Box<dyn Provider>, String> {
         "llama" => {
             let mut llama = LlamaConfig::new(config.base_url.clone(), config.model.clone());
             llama.effort = parse_effort(&config.effort)?;
+            let provider = LlamaProvider::new(llama).map_err(|error| error.to_string())?;
+            let boxed: Box<dyn Provider> = Box::new(provider);
+            Ok(boxed)
+        }
+        "opencode-go" => {
+            let key = config.api_key.clone().ok_or_else(|| {
+                "chave ausente: exporte OPENCODE_GO_API_KEY ou use --api-key".to_owned()
+            })?;
+            let mut llama = LlamaConfig::new(config.base_url.clone(), config.model.clone());
+            llama.effort = parse_effort(&config.effort)?;
+            llama.api_key = Some(key);
+            llama.session = Some(config.session.clone());
+            llama.session_header = Some("x-opencode-session".to_owned());
+            llama.affinity_headers = vec![
+                "x-client-request-id".to_owned(),
+                "x-session-affinity".to_owned(),
+            ];
+            llama.flavor = Flavor::OpenAi;
             let provider = LlamaProvider::new(llama).map_err(|error| error.to_string())?;
             let boxed: Box<dyn Provider> = Box::new(provider);
             Ok(boxed)
@@ -131,7 +152,7 @@ async fn drive(root: &Path, prompt: &str, logger: &dyn Logger, config: &RunConfi
             return ExitCode::FAILURE;
         }
     };
-    apply_checkpoint(&fs, &sessions_dir, config, &mut log);
+    apply_session_start(&fs, &sessions_dir, config, &mut log);
     let system = compose_system(&fs, root);
     let loop_config = LoopConfig {
         max_steps: config.max_steps,
@@ -145,9 +166,17 @@ async fn drive(root: &Path, prompt: &str, logger: &dyn Logger, config: &RunConfi
     emit_final(&log, reason)
 }
 
+/// Aplica o arranque da sessão: checkpoint (se retoma) e compactação forçada.
+fn apply_session_start(fs: &dyn Fs, dir: &Path, config: &RunConfig, log: &mut SessionLog) {
+    apply_checkpoint(fs, dir, config, log);
+    if config.mode.compacts() {
+        force_compaction(log);
+    }
+}
+
 /// Aplica ao log o corte de compactação registado no checkpoint (retoma idêntica).
 fn apply_checkpoint(fs: &dyn Fs, dir: &Path, config: &RunConfig, log: &mut SessionLog) {
-    if !config.resume {
+    if !config.mode.resumes() {
         return;
     }
     let Ok(Some(checkpoint)) = checkpoint::load(fs, dir, &config.session) else {
@@ -192,7 +221,7 @@ fn count_turns(log: &SessionLog) -> u32 {
 
 /// Carrega o log da sessão (ou começa um novo, se `--resume` estiver em falta).
 fn load_session(fs: &dyn Fs, dir: &Path, config: &RunConfig) -> Result<SessionLog, String> {
-    if !config.resume {
+    if !config.mode.resumes() {
         return Ok(SessionLog::new());
     }
     match store::load_recovering(fs, dir, &config.session) {
@@ -225,15 +254,27 @@ fn compose_system(fs: &dyn Fs, root: &Path) -> String {
 }
 
 /// Imprime a última resposta do modelo e mapeia a razão de término para o exit.
+/// Extrai a resposta final **do turno corrente** (nunca de um turno anterior).
 fn emit_final(log: &SessionLog, reason: StopReason) -> ExitCode {
-    let final_text = log.events().iter().rev().find_map(|event| match event {
-        Event::Assistant {
-            content,
-            tool_calls,
-            ..
-        } if tool_calls.is_empty() => Some(content.as_str()),
-        _ => None,
-    });
+    let events = log.events();
+    let start = events
+        .iter()
+        .rposition(|event| matches!(event, Event::TurnStart { .. }))
+        .map_or(0, |index| index.saturating_add(1));
+    let final_text =
+        events
+            .get(start..)
+            .unwrap_or(&[])
+            .iter()
+            .rev()
+            .find_map(|event| match event {
+                Event::Assistant {
+                    content,
+                    tool_calls,
+                    ..
+                } if tool_calls.is_empty() => Some(content.as_str()),
+                _ => None,
+            });
     if let Some(content) = final_text {
         let mut stdout = io::stdout().lock();
         let _ignored = writeln!(stdout, "{content}");

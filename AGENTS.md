@@ -17,3 +17,9 @@ learning → `kd rewind` for handoff.
 - If `kd` is missing on the host: `curl -fsSL https://raw.githubusercontent.com/st-all-one/knudge/main/install.sh | bash` (installs `~/.local/bin`), then `kd prime`.
 Config: `.knudge/config.toml`.
 <!-- knudge:end -->
+
+## Regras locais (fora do bloco knudge)
+
+- **Sem commits.** O agente **não** corre `git commit`, `git push` nem `kd sync`. O
+  versionamento é gerido pela pessoa; o agente só escreve/altera ficheiros e deixa o git
+  por conta dela.
