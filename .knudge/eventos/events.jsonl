@@ -336,3 +336,4 @@
 {"at":1792057865472,"data":{"action":"created"},"id":"evt_014e37gk","note_id":"decision_015ixhxv","op":"write"}
 {"at":1792057865683,"data":{"action":"created"},"id":"evt_00lt2dhi","note_id":"decision_01iralka","op":"write"}
 {"at":1792057865898,"data":{"fix":"broken_anchors"},"id":"evt_00y6kbu0","note_id":"decision_010x6r81","op":"doctor"}
+{"at":1792138883673,"data":{"action":"created"},"id":"evt_00ex36ur","note_id":"fact_00uz1ew4","op":"write"}
