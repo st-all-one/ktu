@@ -11,14 +11,18 @@ pub mod memory_tools;
 mod path;
 pub mod read_file;
 mod search;
+pub mod tool_thread;
 mod toolbox;
 pub mod trash;
 
+pub mod agents;
+pub use agents::{SUBAGENT_TOOL, default_registry, plan_mode_spec, read_only_tool_names};
 pub use bash::BashTool;
 pub use fs::StdFs;
 pub use fs_tools::{FsTools, tool_names};
 pub use memory_tools::MemoryTools;
 pub use read_file::ReadFileTool;
+pub use tool_thread::{ToolThread, WorkerCtx};
 pub use toolbox::Toolbox;
 pub use trash::TrashTool;
 

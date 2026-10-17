@@ -17,11 +17,15 @@ instrument = []
 
 [dependencies]
 thiserror.workspace = true
-indexmap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 async-trait.workspace = true
+futures.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
 tokio.workspace = true
+
+[[bench]]
+name = "core"
+harness = false

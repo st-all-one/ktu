@@ -19,6 +19,26 @@ Agente mínimo (2.ª tentativa). O núcleo é **puro**; todos os efeitos entram 
 | `ktu-memory` | porta `Memory` + motor knudge |
 | `ktu-cli` | binário `ktu` (front-end embedded) |
 
+## Instalação
+
+```bash
+# a partir de uma release (binário pré-compilado + checksum)
+curl -fsSL https://raw.githubusercontent.com/st-all-one/ktu/main/install.sh | bash
+
+# a partir do código-fonte
+KTU_FROM_SOURCE=1 ./install.sh
+```
+
+O `install.sh` instala em `~/.local/bin` (configurável com `KTU_INSTALL_DIR`).
+Variáveis: `KTU_VERSION` (default `latest`), `KTU_REPO`, `KTU_FROM_SOURCE`,
+`KTU_SOURCE_DIR`, `KTU_RELEASE_BASE`.
+
+Para empacotar localmente:
+
+```bash
+make dist   # → target/dist/ktu-<versão>-<triple>.tar.gz (+ .sha256)
+```
+
 ## Uso
 
 ```bash

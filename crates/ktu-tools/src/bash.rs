@@ -5,7 +5,7 @@
 //! destrutivos conhecidos são recusados antes de executar. O `cwd` é o *root*
 //! da sessão e o processo é morto ao expirar (`kill_on_drop`).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -34,6 +34,24 @@ const DESTRUCTIVE: &[(&str, &str)] = &[
     (":(){", "fork bomb"),
     ("> /dev/sd", "escrita directa em dispositivo"),
     ("dd if=/dev/", "escrita directa em dispositivo"),
+];
+
+/// Prefixos de sistema permitidos (leitura/execução de binários e dispositivos).
+///
+/// Tudo o resto que seja absoluto e fique **fora** do *root* é recusado: o
+/// sandbox não deve escrever (nem ler) fora da sessão (ver `risk_01ua5ei2`).
+const SYSTEM_PREFIXES: &[&str] = &[
+    "/bin/",
+    "/sbin/",
+    "/usr/",
+    "/lib/",
+    "/lib64/",
+    "/dev/null",
+    "/dev/stdout",
+    "/dev/stderr",
+    "/dev/fd/",
+    "/proc/",
+    "/sys/",
 ];
 
 /// Tool de execução de comandos.
@@ -73,6 +91,9 @@ impl BashTool {
             return ToolOutcome::error("argumento 'command' em falta");
         };
         if let Some(reason) = analyze(script) {
+            return ToolOutcome::error(format!("comando recusado: {reason}"));
+        }
+        if let Some(reason) = analyze_paths(script, &self.root) {
             return ToolOutcome::error(format!("comando recusado: {reason}"));
         }
         let mut command = Command::new("bash");
@@ -145,6 +166,83 @@ pub fn analyze(script: &str) -> Option<&'static str> {
         .map(|(_pattern, reason)| *reason)
 }
 
+/// Analisa os **caminhos** do comando: recusa `~`/`$HOME`, `..` e absolutos
+/// fora do *root* (exceto localizações de sistema read-only). Fail-closed.
+#[must_use]
+pub fn analyze_paths(script: &str, root: &Path) -> Option<&'static str> {
+    if script.contains('~') || script.contains("$HOME") {
+        return Some("expansao de home fora do root");
+    }
+    let roots = root_prefixes(root);
+    for token in tokens(script) {
+        if token == ".." || token.starts_with("../") {
+            return Some("path relativo escapa do root");
+        }
+        if !token.starts_with('/') {
+            continue;
+        }
+        if roots
+            .iter()
+            .any(|prefix| token.starts_with(prefix.as_str()))
+        {
+            continue;
+        }
+        if SYSTEM_PREFIXES
+            .iter()
+            .any(|prefix| token.starts_with(prefix))
+        {
+            continue;
+        }
+        return Some("caminho absoluto fora do root");
+    }
+    None
+}
+
+/// Prefixos do *root* (canónico e original), com separador final.
+fn root_prefixes(root: &Path) -> Vec<String> {
+    let mut prefixes = Vec::new();
+    for candidate in [root.canonicalize().ok(), Some(root.to_path_buf())] {
+        let Some(path) = candidate else {
+            continue;
+        };
+        let mut text = path.to_string_lossy().into_owned();
+        if !text.ends_with('/') {
+            text.push('/');
+        }
+        if !prefixes.contains(&text) {
+            prefixes.push(text);
+        }
+    }
+    prefixes
+}
+
+/// Divide o comando em tokens (espaços e meta-caracteres de shell).
+fn tokens(script: &str) -> Vec<&str> {
+    script
+        .split(|character: char| {
+            character.is_whitespace()
+                || matches!(
+                    character,
+                    ';' | '|'
+                        | '&'
+                        | '('
+                        | ')'
+                        | '<'
+                        | '>'
+                        | '"'
+                        | '\''
+                        | '='
+                        | '`'
+                        | ','
+                        | ':'
+                        | '{'
+                        | '}'
+                )
+        })
+        .filter(|token| !token.is_empty())
+        .collect()
+}
+
 fn cap(bytes: &[u8], limit: usize) -> Vec<u8> {
     let length = limit.min(bytes.len());
     bytes.get(..length).unwrap_or(&[]).to_vec()
@@ -152,7 +250,9 @@ fn cap(bytes: &[u8], limit: usize) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::analyze;
+    use std::path::Path;
+
+    use super::{analyze, analyze_paths};
 
     #[test]
     fn denies_destructive_commands() {
@@ -161,5 +261,29 @@ mod tests {
         assert!(analyze(":(){ :|:& };:").is_some());
         assert!(analyze("ls -la").is_none());
         assert!(analyze("cargo test").is_none());
+    }
+
+    #[test]
+    fn denies_paths_outside_the_root() {
+        let root = Path::new("/tmp/ktu-root");
+        assert!(analyze_paths("cat ~/x", root).is_some());
+        assert!(analyze_paths("echo $HOME/y", root).is_some());
+        assert!(analyze_paths("cd ..", root).is_some());
+        assert!(analyze_paths("cat ../segredo", root).is_some());
+        assert!(analyze_paths("cat /home/one/x", root).is_some());
+        assert!(analyze_paths("cp x /tmp/outro/y", root).is_some());
+        assert!(analyze_paths("cat /etc/shadow", root).is_some());
+    }
+
+    #[test]
+    fn allows_commands_inside_the_root_and_system_tools() {
+        let root = Path::new("/tmp/ktu-root");
+        assert!(analyze_paths("ls -la", root).is_none());
+        assert!(analyze_paths("cat exploration/x.md", root).is_none());
+        assert!(analyze_paths("echo hi > out.txt", root).is_none());
+        assert!(analyze_paths("ls 2>/dev/null", root).is_none());
+        assert!(analyze_paths("cat /tmp/ktu-root/exploration/x.md", root).is_none());
+        assert!(analyze_paths("/usr/bin/env python3 run.py", root).is_none());
+        assert!(analyze_paths("python3 -c 'print(1)'", root).is_none());
     }
 }

@@ -68,6 +68,9 @@ pub enum Message {
     Assistant {
         /// Texto emitido.
         content: String,
+        /// Pensamento do modelo (*thinking*). Reenviado a gateways `OpenAI` que o
+        /// exigem (`reasoning_content`); descartado no dialeto do `llama-server`.
+        reasoning: String,
         /// Chamadas de tool emitidas no mesmo passo.
         tool_calls: Vec<ToolCall>,
     },
@@ -85,7 +88,8 @@ pub enum Message {
 /// Resultado de uma chamada ao modelo: texto, pensamento e/ou chamadas de tool.
 ///
 /// O **pensamento** (`reasoning`) é um campo próprio, nunca misturado com a
-/// resposta final nem reenviado ao modelo na projecção de *wire* (§2.5).
+/// resposta final. A projecção de *wire* reenvia-o apenas quando o gateway o
+/// exige (thinking mode de gateways `OpenAI`); o `llama-server` não o recebe (§2.5).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Completion {
     /// Texto emitido (resposta final, já sem o pensamento).

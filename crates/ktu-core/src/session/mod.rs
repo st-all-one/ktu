@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::compact::summarize;
 use crate::domain::{Message, StopReason, ToolCall, ToolCallId};
+use crate::plan::Mode;
 
 /// Um evento do log da sessão.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,6 +52,22 @@ pub enum Event {
     TurnEnd {
         /// Razão do término.
         reason: StopReason,
+    },
+    /// Modo de sessão definido por um comando explícito (`SetMode`) — I15.
+    ModeSet {
+        /// Novo modo.
+        mode: Mode,
+    },
+    /// *Dispatch* de um *hook* para os plugins — evidência da intercepção (§2.9).
+    PluginDispatch {
+        /// *Hook* despachado (nome estável).
+        hook: String,
+        /// Geração dos plugins (I12).
+        generation: u32,
+        /// Se o *dispatch* permitiu a acção.
+        allowed: bool,
+        /// Motivo da negação, se houver.
+        reason: Option<String>,
     },
 }
 
@@ -106,6 +123,24 @@ impl SessionLog {
         self.compaction_from.is_some()
     }
 
+    /// Modo corrente da sessão (último `ModeSet`; `Build` por omissão).
+    #[must_use]
+    pub fn mode(&self) -> Mode {
+        self.events
+            .iter()
+            .rev()
+            .find_map(|event| match event {
+                Event::ModeSet { mode } => Some(*mode),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+
+    /// Define o modo da sessão (comando explícito, sempre logado — I15).
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.push(Event::ModeSet { mode });
+    }
+
     /// Reconstrói a projecção de *wire* a partir do log (I3).
     ///
     /// O system prompt é composto **à parte** pelo provider; aqui ficam só as
@@ -150,7 +185,9 @@ impl SessionLog {
                         let _removed = pending.remove(position);
                     }
                 }
-                Event::GuardDecision { .. } => {}
+                Event::GuardDecision { .. }
+                | Event::ModeSet { .. }
+                | Event::PluginDispatch { .. } => {}
             }
         }
         if open_turn {
@@ -171,10 +208,11 @@ fn project(event: &Event) -> Option<Message> {
         }),
         Event::Assistant {
             content,
+            reasoning,
             tool_calls,
-            ..
         } => Some(Message::Assistant {
             content: content.clone(),
+            reasoning: reasoning.clone(),
             tool_calls: tool_calls.clone(),
         }),
         Event::ToolResult {
@@ -187,7 +225,10 @@ fn project(event: &Event) -> Option<Message> {
             content: content.clone(),
             is_error: *is_error,
         }),
-        Event::GuardDecision { .. } | Event::TurnEnd { .. } => None,
+        Event::GuardDecision { .. }
+        | Event::TurnEnd { .. }
+        | Event::ModeSet { .. }
+        | Event::PluginDispatch { .. } => None,
     }
 }
 

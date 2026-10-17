@@ -1,0 +1,45 @@
+name: release
+
+# Publica um tarball por plataforma + checksum quando entra uma tag `v*`.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: empacotar (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Alvo == host do runner: o `dist.sh` empacota `target/release/ktu`.
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Empacotar (scripts/dist.sh)
+        env:
+          KTU_TARGET: ${{ matrix.target }}
+        run: ./scripts/dist.sh
+      - name: Anexar à release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/dist/*.tar.gz
+            target/dist/*.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: true

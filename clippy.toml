@@ -1,5 +1,5 @@
 # =============================================================================
-# katu — clippy.toml (rigor máximo · Rust 1.97 / Edition 2024)
+# ktu — clippy.toml (rigor máximo · Rust 1.99 / Edition 2024)
 # Valores de configuração do Clippy. Os NÍVEIS de lint ficam em
 # [workspace.lints] no Cargo.toml.
 # Ponto de partida: configuração do `knudge` (D92), adaptada.
@@ -71,7 +71,7 @@ vec-box-size-threshold     = 4096
 too-large-for-stack        = 200
 
 # ------------------------------------------------------------ MSRV / docs ----
-msrv = "1.97"                               # OBRIGATÓRIO: casar com rust-version
+msrv = "1.99"                               # OBRIGATÓRIO: casar com rust-version
 avoid-breaking-exported-api = false         # crate interno: aceita sugestões mais duras
 check-incompatible-msrv-in-tests = true
 check-private-items        = true

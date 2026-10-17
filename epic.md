@@ -84,7 +84,8 @@ Regras: **buscar antes de gravar** (dedup `0.75`/`0.92`); **ancorar código** (`
 | **G5** | Subagentes read-only + modo plano | pós-gate |
 | **G6** | Porta única + front-ends | pós-gate |
 | **G7** | Plugins + hot reload + guardrails declarativos | pós-gate |
-| **G8** | GDK, releases, otimização | pós-gate |
+| **G8** | Releases, otimização terciária | pós-gate |
+| **G9** | GDK (decidida: não implementar) | pós-gate |
 
 #### G0 — Fundação & método: workspace, portas/DI, logs estruturados, métricas por função, testes
 *knudge:* `task_00qm4eu6`
@@ -143,36 +144,40 @@ Regras: **buscar antes de gravar** (dedup `0.75`/`0.92`); **ancorar código** (`
 #### G5 — Subagentes read-only (explorer) com fan-out + modo plano
 *knudge:* `task_00j43pma`
 
-- [ ] `task_00zjgygk` AgentSpec + registo de agentes (primário ktu + explorer read-only estrutural)
-- [ ] `task_01rbaqmz` Tool subagent: sessão-filha com contexto fresco, relatório capado, profundidade máxima 1
-- [ ] `task_01sai4yj` Fan-out: N subagentes em paralelo com join e caps; ordem de resultados determinística no log
-- [ ] `task_018f3xhq` Modo plano: AgentSpec read-only + tool plan + artefacto .ktu/plan/<sessao>.json + transição aprovada (I15)
+- [x] `task_00zjgygk` AgentSpec + registo de agentes (primário ktu + explorer read-only estrutural)
+- [x] `task_01rbaqmz` Tool subagent: sessão-filha com contexto fresco, relatório capado, profundidade máxima 1
+- [x] `task_01sai4yj` Fan-out: N subagentes em paralelo com join e caps; ordem de resultados determinística no log
+- [x] `task_018f3xhq` Modo plano: AgentSpec read-only + tool plan + artefacto .ktu/plan/<sessao>.json + transição aprovada (I15)
 
 #### G6 — Porta única agnóstica + front-ends (CLI/TUI/web)
 *knudge:* `task_00af69ek`
 
-- [ ] `task_007t2rm8` ktu-port: protocolo versionado + transporte Channel (embedded) e Http (HTTP/1.1+HTTP/2, sem H3)
-- [ ] `task_01s7s1ka` ktu serve (axum/hyper) com SSE de eventos, health e estado de sessão
-- [ ] `task_01czs2ai` Comandos out-of-band na porta (cancel, SetMode, continue) logados e sobreviventes a resume
-- [ ] `task_0144p1iv` TUI mínima (ratatui) como cliente da porta
-- [ ] `task_01wwavuq` Página web de demonstração (fetch + SSE) como cliente da porta
+- [x] `task_007t2rm8` ktu-port: protocolo versionado + transporte Channel (embedded) e Http (HTTP/1.1+HTTP/2, sem H3)
+- [x] `task_01s7s1ka` ktu serve (axum/hyper) com SSE de eventos, health e estado de sessão
+- [x] `task_01czs2ai` Comandos out-of-band na porta (cancel, SetMode, continue) logados e sobreviventes a resume
+- [x] `task_0144p1iv` TUI mínima (ratatui) como cliente da porta
+- [x] `task_01wwavuq` Página web de demonstração (fetch + SSE) como cliente da porta
 
 #### G7 — Plugins em runtime com hot reload + guardrails declarativos
 *knudge:* `task_002xypc1`
 
-- [ ] `task_00o74kgy` HookEvent tipado + dispatcher + pontos essenciais (session/user/model/action/guard/kernel)
-- [ ] `task_010xowkm` Schema e seed de .agents/guardrails/*.md com loader fail-closed (I16)
-- [ ] `task_01gsm1nb` Runtime de plugins em processo externo (JSON-lines sobre stdio) + manifesto plugin.toml
-- [ ] `task_01oo7e84` Hot reload por gerações: ordem kernel->gate->execução, gate fail-closed (I11/I12)
-- [ ] `task_00uuq3x5` Plugin de exemplo: transforma user.input + gate que nega bash destrutivo
+- [x] `task_00o74kgy` HookEvent tipado + dispatcher + pontos essenciais (session/user/model/action/guard/kernel)
+- [x] `task_010xowkm` Schema e seed de .agents/guardrails/*.md com loader fail-closed (I16)
+- [x] `task_01gsm1nb` Runtime de plugins em processo externo (JSON-lines sobre stdio) + manifesto plugin.toml
+- [x] `task_01oo7e84` Hot reload por gerações: ordem kernel->gate->execução, gate fail-closed (I11/I12)
+- [x] `task_00uuq3x5` Plugin de exemplo: transforma user.input + gate que nega bash destrutivo
 
-#### G8 — Pós-gate: GDK, releases e otimização terciária (só com número)
+#### G8 — Pós-gate: releases e otimização terciária (só com número) ✅
 *knudge:* `task_00fgs8ld`
 
-- [ ] `task_010qrmko` Adaptador GDK (goose-sdk) atrás da feature gdk para os demais providers
-- [ ] `task_01r8grbe` install.sh + packaging + CI/MSRV + releases
-- [ ] `task_005zfzx3` Benchmarks com evidência (métrica + artefacto) e otimização guiada por medição
-- [ ] `task_00ovthd1` Opcionais pós-medida: paralelismo de tools, plugins WASM, dispatch paralelo
+- [x] `task_01r8grbe` install.sh + packaging + CI/MSRV + releases
+- [x] `task_005zfzx3` Benchmarks com evidência (métrica + artefacto) e otimização guiada por medição
+- [x] `task_00ovthd1` Opcionais pós-medida — **fechado como não justificado** (`decision_01e2183g`: o núcleo custa microssegundos; nada o exige)
+
+#### G9 — GDK (adaptador goose-sdk) — **decidida: não implementar** ✅
+*knudge:* `task_01t36xit`
+
+- [x] `task_010qrmko` Adaptador GDK — **decidido não implementar** (`decision_00aw5etj`): o `goose-sdk` real é ACP (`goose acp` por stdio) e o `goose-providers` (alpha) puxa `rmcp`/MCP e ~167 crates extra, com rede (não-determinístico). Alternativa se surgir necessidade (ex.: Anthropic): **provider fino por dialeto**, determinístico e testável com o test double HTTP.
 
 ---
 

@@ -76,7 +76,7 @@ timeout_ms = 30000
 prefix_style = "declarative"
 
 [programs]
-glob = "plan/*.md"
+glob = "plan.md"
 
 [embeddings]
 enabled = true

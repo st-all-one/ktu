@@ -43,12 +43,20 @@ fn forbidden_deps(crate_name: &str) -> Option<&'static [&'static str]> {
             "ktu-provider",
             "ktu-port",
             "ktu-memory",
+            "ktu-plugin",
             "ktu-cli",
         ]),
         "ktu-tools" => Some(&["ktu-provider", "ktu-port"]),
         "ktu-memory" => Some(&["ktu-tools", "ktu-provider", "ktu-port", "ktu-cli"]),
         "ktu-port" => Some(&["ktu-tools", "ktu-provider", "ktu-memory", "ktu-cli"]),
         "ktu-provider" => Some(&["ktu-tools", "ktu-port", "ktu-memory", "ktu-cli"]),
+        "ktu-plugin" => Some(&[
+            "ktu-tools",
+            "ktu-provider",
+            "ktu-port",
+            "ktu-memory",
+            "ktu-cli",
+        ]),
         _ => None,
     }
 }

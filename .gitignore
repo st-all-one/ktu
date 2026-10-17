@@ -34,3 +34,7 @@ rustc-ice-*.txt
 # modelos GGUF (multi-GB; descarregados por scripts/setup-model.sh)
 /models/
 models/
+
+# segredos locais (credenciais de providers)
+.env
+!.env.example

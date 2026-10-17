@@ -3,7 +3,7 @@
 
 CARGO ?= cargo
 
-.PHONY: check fmt clippy test build layers file-length quality clean
+.PHONY: check fmt clippy test build dist bench layers file-length quality deny machete typos supply-chain clean
 
 ## Portão completo local: formatação, lints, testes, firewall de camadas e tamanho de ficheiro.
 check: fmt clippy test layers file-length
@@ -24,6 +24,14 @@ test:
 build:
 	$(CARGO) build --workspace
 
+## Empacota o binário `ktu` (tarball + checksum SHA-256) em `target/dist/`.
+dist:
+	./scripts/dist.sh
+
+## Benchmark determinístico do núcleo → `wiki/benchmarks/ktu-bench.json`.
+bench:
+	$(CARGO) bench -p ktu-core --bench core
+
 ## Firewall de dependências entre camadas (§2.1).
 layers:
 	$(CARGO) run -q -p xtask -- check-layers
@@ -35,6 +43,21 @@ file-length:
 ## Bateria de qualidade p1–p4 com o ktu isolado (ver scripts/quality.sh).
 quality:
 	./scripts/quality.sh $(ARGS)
+
+## Supply chain: advisories, licenças e wildcards (ver deny.toml).
+deny:
+	cargo deny check
+
+## Bateria de supply chain completa (deny + machete + typos).
+supply-chain: deny machete typos
+
+## Dependências declaradas mas não usadas.
+machete:
+	cargo machete
+
+## Erros ortográficos em código/docs (crate-ci/typos; vocabulário em typos.toml).
+typos:
+	typos
 
 clean:
 	$(CARGO) clean

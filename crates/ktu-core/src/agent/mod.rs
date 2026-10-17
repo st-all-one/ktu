@@ -4,65 +4,32 @@
 //! início), **derivado do log** (I3) e **cancelável** (I4). O turno termina
 //! sempre com uma `StopReason` (I5), nunca em silêncio.
 
+mod delegation;
+mod deps;
+mod logging;
+mod spec;
 mod support;
 
-use crate::budget::BudgetGate;
-use crate::cancel::CancelToken;
+pub use deps::{Capabilities, Deps, LoopConfig, Ports, Telemetry};
+pub use spec::{AgentRegistry, AgentSpec};
+
 use crate::compact::keep_from_for_turns;
 use crate::domain::{Message, StopReason, ToolCall, ToolSpec};
 use crate::events;
-use crate::guard::{self, AgentId, Decision, Fact, Guard};
-use crate::memory::Memory;
-use crate::ports::{Clock, Level, Logger, Metrics};
-use crate::provider::{Provider, ProviderError, ProviderRequest};
+use crate::plugin::HookPayload;
+use crate::ports::Level;
+use crate::provider::{ProviderError, ProviderRequest};
 use crate::session::{Event, SessionLog};
-use crate::tools::{ToolExecutor, ToolOutcome};
+use crate::tools::ToolOutcome;
 
-use support::{
-    Stagnation, augment_with_memory, decision_reason, log_event, log_guard_decision,
-    log_kernel_error, log_model_output, log_model_request, log_provider_error, log_tool_call,
-    log_tool_result, reason_str, record_session_end, resolve_synthetic, signature,
+use delegation::driver_specs;
+use logging::{
+    log_event, log_kernel_error, log_model_output, log_model_request, log_provider_error,
 };
-
-/// Configuração do loop.
-#[derive(Debug, Clone, Copy)]
-pub struct LoopConfig {
-    /// Tecto de passos por turno.
-    pub max_steps: u32,
-    /// Repetições da mesma assinatura de tools antes de considerar estagnação.
-    pub max_stagnation: u32,
-}
-
-impl Default for LoopConfig {
-    fn default() -> Self {
-        Self {
-            max_steps: 24,
-            max_stagnation: 3,
-        }
-    }
-}
-
-/// Dependências do loop (injecção explícita — DI).
-pub struct Deps<'d> {
-    /// Provider do modelo.
-    pub provider: &'d dyn Provider,
-    /// Executor de tools (thread T2).
-    pub tools: &'d dyn ToolExecutor,
-    /// Guardrail estrutural.
-    pub guard: &'d dyn Guard,
-    /// Dono único do tecto de contexto (I14).
-    pub budget: &'d BudgetGate,
-    /// Porta de log.
-    pub logger: &'d dyn Logger,
-    /// Porta de métricas.
-    pub metrics: &'d dyn Metrics,
-    /// Porta de tempo.
-    pub clock: &'d dyn Clock,
-    /// Sinal de cancelamento (I4).
-    pub cancel: &'d CancelToken,
-    /// Porta de memória persistente (recall no início de sessão; `None` desliga).
-    pub memory: Option<&'d dyn Memory>,
-}
+use support::{
+    Stagnation, augment_with_memory, fire, has_turn, reason_str, record_session_end,
+    resolve_synthetic, signature,
+};
 
 /// Turnos recentes mantidos verbatim quando o contexto é compactado.
 const KEEP_TURNS: usize = 4;
@@ -75,10 +42,21 @@ pub async fn run_turn(
     prompt: &str,
     config: &LoopConfig,
 ) -> StopReason {
-    let augmented = augment_with_memory(deps, log, system, prompt);
+    if !has_turn(log) {
+        fire(deps, log, &mut HookPayload::SessionStart).await;
+    }
+    let mut prompt = prompt.to_owned();
+    let mut input = HookPayload::UserInput {
+        text: prompt.clone(),
+    };
+    fire(deps, log, &mut input).await;
+    if let HookPayload::UserInput { text } = input {
+        prompt = text;
+    }
+    let augmented = augment_with_memory(deps, log, system, &prompt);
     let system = augmented.as_deref().unwrap_or(system);
     log.push(Event::TurnStart {
-        prompt: prompt.to_owned(),
+        prompt: prompt.clone(),
     });
     log_event(deps, Level::Info, events::TURN_START, "turno iniciado", &[]);
     let reason = {
@@ -87,7 +65,7 @@ pub async fn run_turn(
             deps,
             system,
             config,
-            specs: deps.tools.specs(),
+            specs: driver_specs(deps),
             stagnation: Stagnation::new(config.max_stagnation),
         };
         driver.run().await
@@ -101,6 +79,10 @@ pub async fn run_turn(
         &[("reason", reason_str(reason))],
     );
     record_session_end(deps, log, reason);
+    let mut end = HookPayload::SessionEnd {
+        reason: reason_str(reason).to_owned(),
+    };
+    fire(deps, log, &mut end).await;
     reason
 }
 
@@ -135,7 +117,7 @@ impl Driver<'_, '_> {
 
     async fn step(&mut self, index: u32) -> Step {
         let deps = self.deps;
-        if deps.cancel.is_cancelled() {
+        if deps.ports.cancel.is_cancelled() {
             return Step::Stop(StopReason::Cancelled);
         }
         let Some(messages) = self.fit_messages() else {
@@ -146,18 +128,38 @@ impl Driver<'_, '_> {
             system: self.system.to_owned(),
             messages,
             tools: self.specs.clone(),
-            cancel: deps.cancel.clone(),
+            cancel: deps.ports.cancel.clone(),
         };
         log_model_request(deps, request.messages.len(), request.tools.len());
-        let completion = match deps.provider.complete(&request).await {
+        let mut hook = HookPayload::ModelRequest {
+            messages: request.messages.len(),
+            tools: request.tools.len(),
+        };
+        let verdict = fire(deps, self.log, &mut hook).await;
+        if !verdict.allowed {
+            log_kernel_error(deps, "hook negou o pedido ao modelo");
+            return Step::Stop(StopReason::Error);
+        }
+        let mut completion = match deps.ports.provider.complete(&request).await {
             Ok(completion) => completion,
             Err(ProviderError::Cancelled) => return Step::Stop(StopReason::Cancelled),
             Err(error) => {
                 log_provider_error(deps, &error);
+                let mut hook = HookPayload::KernelError {
+                    message: error.to_string(),
+                };
+                fire(deps, self.log, &mut hook).await;
                 return Step::Stop(StopReason::Error);
             }
         };
         log_model_output(deps, &completion);
+        let mut hook = HookPayload::ModelOutput {
+            text: completion.text.clone(),
+        };
+        fire(deps, self.log, &mut hook).await;
+        if let HookPayload::ModelOutput { text } = hook {
+            completion.text = text;
+        }
         if completion.tool_calls.is_empty() {
             self.log.push(Event::Assistant {
                 content: completion.text,
@@ -173,57 +175,12 @@ impl Driver<'_, '_> {
             tool_calls: completion.tool_calls.clone(),
         });
         if self.stagnation.is_stalled() {
-            resolve_synthetic(self.log, &completion.tool_calls, "estagnacao");
+            resolve_synthetic(deps, self.log, &completion.tool_calls, "estagnacao");
             return Step::Stop(StopReason::Stalled);
         }
         let remaining = self.config.max_steps.saturating_sub(index);
-        for call in &completion.tool_calls {
-            self.run_call(call, remaining).await;
-        }
+        self.run_calls(&completion.tool_calls, remaining).await;
         Step::Continue
-    }
-
-    async fn run_call(&mut self, call: &ToolCall, remaining_steps: u32) {
-        let deps = self.deps;
-        if deps.cancel.is_cancelled() {
-            self.push_result(call, ToolOutcome::error("cancelado pelo utilizador"));
-            return;
-        }
-        let fact = Fact {
-            agent: AgentId::Primary,
-            tool: call.name.clone(),
-            requested_path: guard::path_argument(&call.arguments),
-            remaining_steps,
-            depth: 0,
-        };
-        let decision = deps.guard.evaluate(&fact);
-        let reason = decision_reason(decision);
-        self.log.push(Event::GuardDecision {
-            tool: call.name.clone(),
-            allowed: matches!(decision, Decision::Allow),
-            reason: reason.clone(),
-        });
-        log_guard_decision(deps, &call.name, &reason);
-        match decision {
-            Decision::Allow => {
-                log_tool_call(deps, &call.name);
-                let outcome = deps.tools.execute(call).await;
-                log_tool_result(deps, &call.name, &outcome);
-                self.push_result(call, outcome);
-            }
-            Decision::Deny(reason) => {
-                self.push_result(
-                    call,
-                    ToolOutcome::error(format!("negado: {}", reason.as_str())),
-                );
-            }
-            Decision::Escalate => {
-                self.push_result(
-                    call,
-                    ToolOutcome::error("requer aprovacao (indisponivel nesta fase)"),
-                );
-            }
-        }
     }
 
     /// Projecta as mensagens e garante que cabem no orçamento, compactando uma vez
@@ -231,20 +188,23 @@ impl Driver<'_, '_> {
     fn fit_messages(&mut self) -> Option<Vec<Message>> {
         let deps = self.deps;
         let mut messages = crate::instrument!(
-            deps.metrics,
-            deps.clock,
+            deps.telemetry.metrics,
+            deps.telemetry.clock,
             "derive_messages",
             self.log.derive_messages()
         );
-        if !deps.budget.fits(self.system, &messages) && self.compact_once() {
+        if !deps.ports.budget.fits(self.system, &messages) && self.compact_once() {
             messages = crate::instrument!(
-                deps.metrics,
-                deps.clock,
+                deps.telemetry.metrics,
+                deps.telemetry.clock,
                 "derive_messages",
                 self.log.derive_messages()
             );
         }
-        deps.budget.fits(self.system, &messages).then_some(messages)
+        deps.ports
+            .budget
+            .fits(self.system, &messages)
+            .then_some(messages)
     }
 
     /// Compacta o contexto uma vez (mantém os últimos `KEEP_TURNS`). `true` se mudou.
@@ -268,6 +228,9 @@ impl Driver<'_, '_> {
     }
 
     fn push_result(&mut self, call: &ToolCall, outcome: ToolOutcome) {
+        // Ponto único de emissão de `tool.result`: garante o evento pela porta de
+        // log para **todo** o desfecho (executado, negado, cap, sintético).
+        support::log_tool_result(self.deps, &call.name, &outcome);
         self.log.push(Event::ToolResult {
             tool_call_id: call.id.clone(),
             name: call.name.clone(),

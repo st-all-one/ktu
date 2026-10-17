@@ -10,12 +10,17 @@ publish.workspace = true
 [lints]
 workspace = true
 
+# Protocolo (de)serializável e dois transportes: `Channel` (in-process, sem
+# serialização) e `Http` (rede). Não contém lógica de agente (§2.3 do plan.md).
 [dependencies]
 ktu-core.workspace = true
-thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+reqwest = { workspace = true, features = ["stream"] }
 
 [dev-dependencies]
 proptest.workspace = true

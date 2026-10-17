@@ -1,0 +1,5 @@
+name = "input-note"
+entrypoint = "./run.sh"
+events = ["user.input"]
+mode = "transform"
+timeout_ms = 2000

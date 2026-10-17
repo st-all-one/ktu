@@ -29,6 +29,8 @@ struct WireMessage<'a> {
     role: &'static str,
     content: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_content: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tool_calls: Option<Vec<WireToolCall<'a>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_call_id: Option<&'a str>,
@@ -107,11 +109,17 @@ pub fn request_body(
         messages.push(WireMessage {
             role: "system",
             content: &request.system,
+            reasoning_content: None,
             tool_calls: None,
             tool_call_id: None,
         });
     }
-    messages.extend(request.messages.iter().map(message_wire));
+    messages.extend(
+        request
+            .messages
+            .iter()
+            .map(|message| message_wire(message, flavor)),
+    );
     let tools: Vec<WireTool<'_>> = request.tools.iter().map(tool_wire).collect();
     let tool_choice = if tools.is_empty() { None } else { Some("auto") };
     let body = WireRequest {
@@ -152,27 +160,32 @@ fn tool_call_wire(call: &ToolCall) -> WireToolCall<'_> {
     }
 }
 
-fn message_wire(message: &Message) -> WireMessage<'_> {
+fn message_wire(message: &Message, flavor: Flavor) -> WireMessage<'_> {
     match message {
         Message::System { content } => WireMessage {
             role: "system",
             content,
+            reasoning_content: None,
             tool_calls: None,
             tool_call_id: None,
         },
         Message::User { content } => WireMessage {
             role: "user",
             content,
+            reasoning_content: None,
             tool_calls: None,
             tool_call_id: None,
         },
         Message::Assistant {
             content,
+            reasoning,
             tool_calls,
-            ..
         } => WireMessage {
             role: "assistant",
             content,
+            // Gateways `OpenAI` em thinking mode exigem o campo em **todas** as
+            // mensagens de assistente (mesmo vazio); o `llama-server` não o recebe.
+            reasoning_content: (flavor == Flavor::OpenAi).then_some(reasoning.as_str()),
             tool_calls: if tool_calls.is_empty() {
                 None
             } else {
@@ -187,6 +200,7 @@ fn message_wire(message: &Message) -> WireMessage<'_> {
         } => WireMessage {
             role: "tool",
             content,
+            reasoning_content: None,
             tool_calls: None,
             tool_call_id: Some(tool_call_id.as_str()),
         },

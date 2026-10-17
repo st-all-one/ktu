@@ -6,8 +6,10 @@
 use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
 
+use crate::agent::AgentSpec;
+
 /// Agente em execução (o conjunto de tools vem do seu `AgentSpec`, §2.6).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AgentId {
     /// Agente primário (vê todas as tools do seu conjunto).
     Primary,
@@ -22,6 +24,16 @@ impl AgentId {
         match self {
             Self::Primary => "ktu",
             Self::Explorer => "explorer",
+        }
+    }
+
+    /// Interpreta o nome estável de um agente (`ktu`, `explorer`).
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "ktu" => Some(Self::Primary),
+            "explorer" => Some(Self::Explorer),
+            _ => None,
         }
     }
 }
@@ -52,6 +64,10 @@ pub enum DenyReason {
     StepCap,
     /// Profundidade de subagente excedida.
     DepthExceeded,
+    /// Negado por um *gate* de plugin (fail-closed, I11).
+    Plugin,
+    /// Negado por um guardrail declarativo (§2.8, camada 2).
+    Guardrail,
 }
 
 impl DenyReason {
@@ -63,6 +79,8 @@ impl DenyReason {
             Self::PathEscape => "path_escape",
             Self::StepCap => "step_cap",
             Self::DepthExceeded => "depth_exceeded",
+            Self::Plugin => "plugin",
+            Self::Guardrail => "guardrail",
         }
     }
 }
@@ -104,6 +122,13 @@ impl StructuralGuard {
             root: root.into(),
             max_depth,
         }
+    }
+
+    /// Cria um guard a partir do conjunto de tools e do cap de profundidade de um
+    /// `AgentSpec` (o agente só vê o que a sua especificação declara).
+    #[must_use]
+    pub fn for_spec(root: impl Into<PathBuf>, spec: &AgentSpec) -> Self {
+        Self::new(root, spec.tool_names(), spec.max_depth())
     }
 }
 

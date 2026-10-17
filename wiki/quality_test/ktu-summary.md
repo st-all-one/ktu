@@ -2,7 +2,7 @@
 
 | questao | compactado | sonda | chars |
 |---|---|---|---|
-| p1 | false | — | 1327 |
-| p2 | false | — | 2668 |
-| p3 | false | — | 117 |
-| p4 | true | true | 938 |
+| p1 | false | — | 5627 |
+| p2 | false | — | 4862 |
+| p3 | false | — | 3023 |
+| p4 | true | true | 0 |

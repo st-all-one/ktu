@@ -12,12 +12,9 @@ workspace = true
 
 [dependencies]
 ktu-core.workspace = true
-thiserror.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 # Motor de recuperação adoptado (§2.7): schema (id/hash), codec JSON canónico,
 # índice BM25 + RRF e dedup — consumido em memória, nunca acoplado ao kernel.
-knudge-core = { path = "../../REF/knudge/crates/knudge-core" }
+knudge-core = { path = "../../crates/knudge/crates/knudge-core" }
 
 [dev-dependencies]
 proptest.workspace = true

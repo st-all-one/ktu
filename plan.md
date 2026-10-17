@@ -206,7 +206,9 @@ em **`llama.cpp` *stock*** (sem fork, sem gambiarras). Escolhido **para este hos
 (7,56 GB) cabem mais justos. Contexto até 262 144 tokens.
 **Reasoning/tools:** é um modelo de raciocínio (o turno abre com ` thinking…<｜end▁of▁thinking｜>`) e emite
 `tool_calls` nativos (`--jinja`, template do modelo). O **reasoning** é campo próprio, nunca
-misturado com a resposta final, e o tecto de geração tem de o acomodar.
+misturado com a resposta final, e o tecto de geração tem de o acomodar. Para o
+`llama-server` não é reenviado; gateways `OpenAI` em *thinking mode* exigem-no de
+volta como `reasoning_content` (ver `crates/ktu-provider/src/wire.rs`).
 **Sampling (tarefas gerais):** `temperature=1.0`, `top_p=0.95`, `top_k=20`, `min_p=0.0`,
 `presence_penalty=1.5`, `repetition_penalty=1.0` (código preciso: `temperature=0.6`,
 `presence_penalty=0.0`). `ktu providers doctor` valida o ficheiro GGUF e faz uma sonda de tool-calling
@@ -582,7 +584,7 @@ Regra de ouro: **uma fase não abre antes de a anterior fechar verde**, e nenhum
 
 ### F0 — Fundação (½ dia)
 Workspace `ktu` (crates `ktu-core`, `ktu-tools`, `ktu-provider`, `ktu-port`, `ktu-cli`, `ktu-memory`),
-edition 2024 / rust 1.97+, lints iguais aos do repo (`clippy.toml` já existe),
+edition 2024 / rust 1.99+, lints iguais aos do repo (`clippy.toml` já existe),
 `rustfmt.toml`, `Makefile` (`check` = fmt + clippy `-D warnings` + test), README enxuto.
 Layout `.agents/` (skills, guardrails, memory) e `.ktu/` (runtime) criados por `ktu init`.
 **Saída:** `cargo make check` verde com um crate vazio e 1 teste.
@@ -722,7 +724,7 @@ knudge/katu); zero `unwrap/expect/panic` em `src/`.
 | Risco | Prob. | Resposta |
 |---|---|---|
 | Modelo local fraco em tool-calling (granite-97m é pequeno demais) | alta | usar o modelo de referência (Ornith-1.5-9B Q4_K_M, tool-calling nativo; doctor faz sonda); testes do loop usam fake provider, independentes do modelo |
-| Reasoning do modelo consome o tecto de geração / polui a resposta | média | reasoning em campo próprio (nunca reenviado ao modelo); tecto de geração acomoda o ` thinking`; fallback de parsing inline |
+| Reasoning do modelo consome o tecto de geração / polui a resposta | média | reasoning em campo próprio (não reenviado ao `llama-server`; reenviado como `reasoning_content` em gateways `OpenAI`); tecto de geração acomoda o ` thinking`; fallback de parsing inline |
 | Parsing de tool-call divergente entre modelos | média | camada de parsing única + fallback texto; fixture por família de template |
 | knudge-core pesado p/ compilar | média | feature `memory` ligada por defeito mas isolada; desligável para builds de teste do loop |
 | Compactação comer informação | média | compactação **aditiva** (cru preservado, resumo marcado como derivado); teste de ouro Q3→Q4 |

@@ -1,0 +1,7 @@
+# Toolchain do ktu — Rust 1.99 (canal minor: resolve o último patch disponível).
+# A MSRV é contrato: `rust-version` no Cargo.toml e `msrv` no clippy.toml devem casar.
+# Inspirado no REF/sniff-css/rust-toolchain.toml e em .agents/skills/rust/.
+[toolchain]
+channel = "1.99"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

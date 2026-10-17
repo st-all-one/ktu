@@ -1,0 +1,10 @@
+---
+id: fact_01fz2so9
+type: fact
+statement: Analise critica do backlog: 123 paginas reduzidas a 24 ativas (Tier1 14 + Tier2 10); resto arquivado
+created_at: 2026-10-17T14:34:20.995Z
+body_hash: 79929a05
+schema_version: 2
+anchors: [wiki/backlog_reviews.md]
+---
+wiki/backlog_reviews.md faz a analise critica das 123 propostas do backlog com o filtro "agente realmente util e minimo". Diagnostico: 123 paginas = 9x o codigo (13 124 linhas), um catalogo de 6 referenciais, nao uma fila; contradiz o §0 do plan.md (proibe subsistemas sem teste que os exija). Auto-critica: as 6 revisoes foram exaustivas mas acriticas (veredicto local sem orcamento global). Teste de utilidade (5 perguntas: U1 turnos falhados, U2 turnos/tarefa, U3 correcao de edicao, U4 robustez, U5 nao adiciona subsistema). Critica transversal: duplicacao (123 -> ~90 decisões reais; ex. 19/41/53 templates, 22/48 compactacao, 81/94 output, 73/108 cache, 9/74 structured, 36/45 codemode, 1/21/82/110 permissoes, 76/83/99/122 config, 16/123 git, 40/49/78/85/111 sessao); categoria errada (plumbing de provider, seguranca a mais para dev local, formalismo); o backlog como sintoma. Triagem em 4 tiers. Tier 1 Nucleo util (14): 75 edit multi-bloco, 96 line-endings, 95 fila mutacao, 94 truncagem, 70 read continuacao, 68 recusa acionavel, 106 MaxSteps prompt, 65 deteccao eco, 67+107 tool calls declaradas+reparacao, 63 durabilidade, 114+115+116 knudge store/write+rewind+doctor. Tier 2 Usabilidade (10): 104 inbox/steer, 103 snapshots/undo, 85 editar/fork, 64 turn-lock, 105 execution claim, 41 templates, 20 slash, 84 nome sessao, 52 AGENTS.md aninhados, 51 agentes declarativos. Tier 3 Avaliar com medicao (~30). Tier 4 Podar/arquivar (~60: YAGNI §0, formalismo prematuro, duplicados, ja coberto). Conjunto minimo de 12 itens por ordem. Regra de poda: uma pagina so entra no backlog ativo se citar o teste/sintoma que a exige; backlog ativo <= 25 paginas. Riscos: scope creep (o backlog virar roadmap). Recomendacao: aceitar o tribunal, arquivar Tier 4, fundir duplicados, executar Tier 1, so reabrir Tier 3 com numero, reclassificar governanca como processo.

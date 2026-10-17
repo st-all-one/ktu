@@ -1,15 +1,62 @@
 //! Auxiliares do loop: estagnação, assinaturas e emissão de log.
 
-use crate::domain::{Completion, StopReason, ToolCall};
+use crate::domain::{StopReason, ToolCall};
 use crate::events;
 use crate::guard::Decision;
 use crate::memory::{MemoryDraft, MemoryKind, compose_hints};
-use crate::ports::{Level, LogRecord};
-use crate::provider::ProviderError;
+use crate::plugin::{HookPayload, HookVerdict};
+use crate::ports::Level;
 use crate::session::{Event, SessionLog};
 use crate::tools::ToolOutcome;
 
+pub(super) use super::logging::{log_event, log_guard_decision, log_tool_call, log_tool_result};
+
 use super::Deps;
+
+/// `true` se o log já tem um turno iniciado (sessão não é nova).
+pub(super) fn has_turn(log: &SessionLog) -> bool {
+    log.events()
+        .iter()
+        .any(|event| matches!(event, Event::TurnStart { .. }))
+}
+
+/// Despacha um *hook* pela porta de intercepção e regista a evidência (§2.9).
+///
+/// Sem plugins (`None`) devolve permissão imediata. O registo entra **no log da
+/// sessão** (evidência) e na porta de log (contrato de máquina).
+pub(super) async fn fire(
+    deps: &Deps<'_>,
+    log: &mut SessionLog,
+    payload: &mut HookPayload,
+) -> HookVerdict {
+    let Some(hooks) = deps.capabilities.plugins else {
+        return HookVerdict::pass(0);
+    };
+    let verdict = hooks.dispatch(payload).await;
+    let event = payload.event().as_str();
+    let generation = verdict.generation.to_string();
+    let allowed = if verdict.allowed { "true" } else { "false" };
+    let reason = verdict.reason.as_deref().unwrap_or("");
+    log_event(
+        deps,
+        Level::Info,
+        events::PLUGIN_DISPATCH,
+        "hook despachado",
+        &[
+            ("event", event),
+            ("generation", generation.as_str()),
+            ("allowed", allowed),
+            ("reason", reason),
+        ],
+    );
+    log.push(Event::PluginDispatch {
+        hook: event.to_owned(),
+        generation: verdict.generation,
+        allowed: verdict.allowed,
+        reason: verdict.reason.clone(),
+    });
+    verdict
+}
 
 /// Estado de detecção de estagnação (sem progresso repetido).
 #[derive(Debug)]
@@ -42,13 +89,21 @@ impl Stagnation {
     }
 }
 
-/// Resolve, como erro, as chamadas pendentes (para I2) após paragem abrupta.
-pub(super) fn resolve_synthetic(log: &mut SessionLog, calls: &[ToolCall], why: &str) {
+/// Resolve, como erro, as chamadas pendentes (para I2) após paragem abrupta,
+/// emitindo também o `tool.result` correspondente pela porta de log.
+pub(super) fn resolve_synthetic(
+    deps: &Deps<'_>,
+    log: &mut SessionLog,
+    calls: &[ToolCall],
+    why: &str,
+) {
     for call in calls {
+        let content = format!("sem execucao: {why}");
+        log_tool_result(deps, &call.name, &ToolOutcome::error(content.as_str()));
         log.push(Event::ToolResult {
             tool_call_id: call.id.clone(),
             name: call.name.clone(),
-            content: format!("sem execucao: {why}"),
+            content,
             is_error: true,
         });
     }
@@ -84,106 +139,6 @@ pub(super) fn reason_str(reason: StopReason) -> &'static str {
     }
 }
 
-/// Emite um evento estruturado pela porta de log.
-pub(super) fn log_event(
-    deps: &Deps<'_>,
-    level: Level,
-    event: &str,
-    message: &str,
-    fields: &[(&str, &str)],
-) {
-    deps.logger.log(&LogRecord {
-        level,
-        event,
-        message,
-        fields,
-    });
-}
-
-/// Emite um erro de provider pela porta de log.
-pub(super) fn log_provider_error(deps: &Deps<'_>, error: &ProviderError) {
-    let message = error.to_string();
-    log_event(
-        deps,
-        Level::Error,
-        events::KERNEL_ERROR,
-        "erro do provider",
-        &[("erro", message.as_str())],
-    );
-}
-
-/// Regista o pedido ao modelo (nº de mensagens e de tools).
-pub(super) fn log_model_request(deps: &Deps<'_>, messages: usize, tools: usize) {
-    let messages = messages.to_string();
-    let tools = tools.to_string();
-    log_event(
-        deps,
-        Level::Debug,
-        events::MODEL_REQUEST,
-        "pedido ao modelo",
-        &[("messages", messages.as_str()), ("tools", tools.as_str())],
-    );
-}
-
-/// Regista a saída do modelo (tamanhos e nº de tool calls).
-pub(super) fn log_model_output(deps: &Deps<'_>, completion: &Completion) {
-    let content = completion.text.len().to_string();
-    let reasoning = completion.reasoning.len().to_string();
-    let calls = completion.tool_calls.len().to_string();
-    log_event(
-        deps,
-        Level::Debug,
-        events::MODEL_OUTPUT,
-        "saida do modelo",
-        &[
-            ("content_bytes", content.as_str()),
-            ("reasoning_bytes", reasoning.as_str()),
-            ("tool_calls", calls.as_str()),
-        ],
-    );
-}
-
-/// Regista a decisão de guardrail.
-pub(super) fn log_guard_decision(deps: &Deps<'_>, tool: &str, reason: &str) {
-    log_event(
-        deps,
-        Level::Debug,
-        events::GUARD_DECISION,
-        "decisao de guardrail",
-        &[("tool", tool), ("reason", reason)],
-    );
-}
-
-/// Regista uma chamada de tool.
-pub(super) fn log_tool_call(deps: &Deps<'_>, tool: &str) {
-    log_event(
-        deps,
-        Level::Debug,
-        events::TOOL_CALL,
-        "tool chamada",
-        &[("tool", tool)],
-    );
-}
-
-/// Regista o resultado de uma tool.
-pub(super) fn log_tool_result(deps: &Deps<'_>, tool: &str, outcome: &ToolOutcome) {
-    log_event(
-        deps,
-        Level::Debug,
-        events::TOOL_RESULT,
-        "resultado de tool",
-        &[
-            ("tool", tool),
-            ("is_error", if outcome.is_error { "true" } else { "false" }),
-        ],
-    );
-}
-
-/// Regista um erro do kernel.
-pub(super) fn log_kernel_error(deps: &Deps<'_>, message: &str) {
-    log_event(deps, Level::Error, events::KERNEL_ERROR, message, &[]);
-}
-
 /// Máximo de ponteiros de memória recordados no arranque de sessão.
 const RECALL_LIMIT: usize = 5;
 
@@ -196,8 +151,8 @@ pub(super) fn augment_with_memory(
     system: &str,
     prompt: &str,
 ) -> Option<String> {
-    let memory = deps.memory?;
-    if !log.events().is_empty() {
+    let memory = deps.capabilities.memory?;
+    if has_turn(log) {
         return None;
     }
     let hints = memory.recall(prompt, RECALL_LIMIT).ok()?;
@@ -224,7 +179,7 @@ const MAX_STATEMENT_SCALARS: usize = 120;
 /// tool; falhas degradam com um warning (a memória é capacidade acessória, não a
 /// verdade do turno).
 pub(super) fn record_session_end(deps: &Deps<'_>, log: &SessionLog, reason: StopReason) {
-    let Some(memory) = deps.memory else {
+    let Some(memory) = deps.capabilities.memory else {
         return;
     };
     if !matches!(reason, StopReason::EndTurn) {

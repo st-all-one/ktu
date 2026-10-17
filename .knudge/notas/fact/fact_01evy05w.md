@@ -1,0 +1,10 @@
+---
+id: fact_01evy05w
+type: fact
+statement: Knudge 0.6.1 clonado em crates/knudge; migracao do ktu-memory validada (uma linha)
+created_at: 2026-10-17T13:22:07.784Z
+body_hash: 0ece8270
+schema_version: 2
+anchors: [crates/ktu-memory/Cargo.toml]
+---
+A instancia actual do knudge (v0.6.1, https://github.com/st-all-one/knudge.git) foi clonada para crates/knudge (a referencia antiga era REF/knudge v0.5.4). Arquitetura identica ao ktu: dominio puro + portas (Clock/Rng/Env/Fs/Git/HookRunner/Logger/Embedder) + adaptadores; facade de incorporacao Knudge/KnudgeBuilder (D214) com layout configuravel; 3 crates (knudge-core publicavel, knudge-cli=kd, knudge-mcp). Maturizacao 0.5.4->0.6.1 (mesma API publica nos sitios usados pelo ktu): D214 facade+layout, D207 claims SPO+ontologia+proveniencia, D208 TMS+drift KL/JS, D192 PageRank/PPR, D193 Louvain, D190 shelf-life FSRS, D189 confianca Beta, D206 stemming PT, D204 MinHash/LSH, D216 prefixo de embeddings, D215 dreno em lotes, D191 slots, D205 flow/caminho critico. Migracao do ktu-memory: mudar o path da dependencia knudge-core de ../../REF/knudge/crates/knudge-core para ../../crates/knudge/crates/knudge-core; cargo check -p ktu-memory e cargo test -p ktu-memory (7 testes) verdes. O ktu-memory usa o knudge apenas como motor de retrieval+dedup sobre JSONL proprio (~15% do motor); ignora Store/notas/eventos, write::write, task, handoff::rewind, health::doctor, lifecycle, embeddings, graph avancado, config, git. Recomendacao (wiki/revisao-knudge.md): manter a instancia em crates/knudge; engrossar o adaptador para Store+notas/eventos+write (opcao B/C) mantendo a porta Memory com tipos do ktu; adicionar rewind e doctor. Distincao critica: a memoria de desenvolvimento do ktu (.knudge/ + kd, ja em uso) != o motor de memoria do agente (ktu-memory, hoje thin). typos.toml e .git/info/exclude atualizados para o checkout local. 4 paginas novas no backlog (114-117).

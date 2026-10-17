@@ -50,6 +50,7 @@ fn message_bytes(message: &Message) -> usize {
         Message::Assistant {
             content,
             tool_calls,
+            ..
         } => tool_calls.iter().fold(content.len(), |bytes, call| {
             bytes
                 .saturating_add(call.name.len())
@@ -88,6 +89,7 @@ mod tests {
             },
             Message::Assistant {
                 content: String::new(),
+                reasoning: String::new(),
                 tool_calls: Vec::new(),
             },
             Message::User {

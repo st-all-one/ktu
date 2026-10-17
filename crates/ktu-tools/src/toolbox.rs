@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 use ktu_core::domain::{ToolCall, ToolSpec};
 use ktu_core::memory::Memory;
+use ktu_core::plan::{self, FsPlanHost};
 use ktu_core::ports::{Clock, Fs};
 use ktu_core::tools::{ToolExecutor, ToolOutcome};
 
@@ -22,6 +23,7 @@ pub struct Toolbox<'a> {
     bash: BashTool,
     trash: TrashTool<'a>,
     memory: Option<MemoryTools<'a>>,
+    plan: Option<FsPlanHost<'a>>,
 }
 
 impl<'a> Toolbox<'a> {
@@ -40,7 +42,15 @@ impl<'a> Toolbox<'a> {
             bash: BashTool::new(root.clone()),
             trash: TrashTool::new(root, fs, clock),
             memory: memory.map(MemoryTools::new),
+            plan: None,
         }
+    }
+
+    /// Liga a tool `plan` (modo plano) a um host persistente sobre `Fs`.
+    #[must_use]
+    pub fn with_plan(mut self, host: FsPlanHost<'a>) -> Self {
+        self.plan = Some(host);
+        self
     }
 }
 
@@ -59,6 +69,9 @@ impl ToolExecutor for Toolbox<'_> {
         if let Some(memory) = &self.memory {
             specs.extend(memory.specs());
         }
+        if self.plan.is_some() {
+            specs.push(plan::spec());
+        }
         specs
     }
 
@@ -69,6 +82,10 @@ impl ToolExecutor for Toolbox<'_> {
             "memory_ask" | "memory_write" => match &self.memory {
                 Some(memory) => memory.execute(call).await,
                 None => ToolOutcome::error("memoria indisponivel nesta sessao"),
+            },
+            "plan" => match &self.plan {
+                Some(plan) => plan.execute(&call.arguments),
+                None => ToolOutcome::error("tool 'plan' indisponivel fora do modo plano"),
             },
             _ => self.fs.execute(call).await,
         }

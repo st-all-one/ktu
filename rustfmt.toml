@@ -1,6 +1,17 @@
+# Configuração do rustfmt do ktu (apenas opções ESTÁVEIS).
+#
+# A toolchain é estável (1.99), então opções `unstable` (ex.: `imports_granularity`,
+# `group_imports`, `wrap_comments`) não são usadas — em estável seriam ignoradas com
+# aviso. Agrupar imports (std/externos/crate) é feito à mão.
+# Espelho do REF/sniff-css/rustfmt.toml, alinhado com .agents/skills/rust/.
+
 edition = "2024"
+# Estilo do Style Guide (RFC 3338): explícito para não divergir entre `rustfmt` e `cargo fmt`.
+style_edition = "2024"
 max_width = 100
 tab_spaces = 4
 newline_style = "Unix"
+# Convenção do projecto: ids/hashes saem em hex minúsculo.
+hex_literal_case = "Lower"
 use_field_init_shorthand = true
 use_try_shorthand = true

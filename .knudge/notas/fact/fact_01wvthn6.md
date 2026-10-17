@@ -1,0 +1,10 @@
+---
+id: fact_01wvthn6
+type: fact
+statement: "Revisao profunda do pi: higiene de tools/config (exposicao/truncagem/fila de mutacao, schema) e o que falta ao ktu"
+created_at: 2026-10-17T13:06:08.321Z
+body_hash: 705b947d
+schema_version: 2
+anchors: [wiki/revisao-pi-profunda.md]
+---
+wiki/revisao-pi-profunda.md le core/, utils/, extensions/, modes/ e docs (settings/models/security/json/keybindings/configuration) do REF/pi (monorepo TS) para alem dos candidatos iniciais (arvore de sessao, prompt templates, steering, virtual models, packages, codemode, temas, project trust, compactacao parametrizada, sessoes versionadas, chord). Incorporar: exposicao de tools (declared/deferred) + tool_search (ranker BM25 que carrega tools no proximo pedido; distinto do A4 rejeitado pelo katu); truncagem sistematica de output (duplo limite 2000 linhas/50KB, sem linhas parciais, output completo em ficheiro com caminho; consolida goose 81); fila de mutacao por ficheiro (serializa edits concorrentes); normalizacao de line-endings/BOM no edit (CRLF/LF); SYSTEM.md/APPEND_SYSTEM.md (substituir/estender o prompt, projecto > utilizador); keybindings configuraveis (accoes nomeadas); settings.json com JSON Schema + diagnostico; precedencia de credenciais (runtime > guardada > config > env). Avaliar: visao/imagens (ImageContent, redimensionar, referencia no log), /reload (recarregar recursos em repouso por geracao). Consolidacoes: cache warming -> 73, nested tool calls -> 45, provider attribution -> 72, timings -> 61, catalogo remoto -> 24, export HTML -> 25, diagnostics -> 89. Confirmacoes: stdout=dados/stderr=logs, JSONL framing estrito, skills por demanda, contexto do branch, compactacao aditiva, sessoes versionadas, project trust, retry. Nao trazer: ai, durable, mcp, env (SSH), tui differential, telemetry, evals, extensoes TS in-process, npm, share. 10 paginas novas no backlog (93-102). Fecha o ciclo dos referenciais (katu=governanca, goose=seguranca/MOIM, pi=higiene de tools/config).

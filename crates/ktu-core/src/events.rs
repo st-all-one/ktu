@@ -32,6 +32,12 @@ pub const MEMORY_RECALL: &str = "memory.recall";
 pub const MEMORY_WRITE: &str = "memory.write";
 /// Contexto compactado (resumo dos turnos antigos) — `compacted: true`.
 pub const SESSION_COMPACT: &str = "session.compact";
+/// Servidor da porta iniciado (endereço em `bind`).
+pub const SERVER_START: &str = "server.start";
+/// *Dispatch* de um hook para os plugins (evidência da intercepção — §2.9).
+pub const PLUGIN_DISPATCH: &str = "plugin.dispatch";
+/// Ciclo de vida de um plugin (carregado, recarregado, errado — §2.9).
+pub const PLUGIN_LIFECYCLE: &str = "plugin.lifecycle";
 
 /// Todos os ids conhecidos, para validação e *goldens*.
 pub const ALL: &[&str] = &[
@@ -49,4 +55,7 @@ pub const ALL: &[&str] = &[
     MEMORY_RECALL,
     MEMORY_WRITE,
     SESSION_COMPACT,
+    SERVER_START,
+    PLUGIN_DISPATCH,
+    PLUGIN_LIFECYCLE,
 ];

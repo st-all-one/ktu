@@ -44,6 +44,7 @@ fn assistant_tool_calls_use_one_message_with_n_calls() {
         &request(
             vec![Message::Assistant {
                 content: String::new(),
+                reasoning: String::new(),
                 tool_calls: vec![
                     ToolCall {
                         id: ToolCallId::new("a"),
@@ -106,5 +107,61 @@ fn openai_flavor_omits_llama_only_fields() {
     assert!(
         body.pointer("/chat_template_kwargs/reasoning_effort")
             .is_none()
+    );
+}
+
+#[test]
+fn openai_flavor_echoes_reasoning_content() {
+    let request = request(
+        vec![Message::Assistant {
+            content: "feito".to_owned(),
+            reasoning: "pensei".to_owned(),
+            tool_calls: Vec::new(),
+        }],
+        Vec::new(),
+    );
+    let openai = request_body(
+        "m",
+        &request,
+        Sampling::ornith(),
+        ReasoningEffort::Low,
+        Flavor::OpenAi,
+    );
+    assert_eq!(
+        openai.pointer("/messages/1/reasoning_content"),
+        Some(&serde_json::json!("pensei"))
+    );
+    // O dialeto do `llama-server` continua a **não** reenviar o pensamento.
+    let llama = request_body(
+        "m",
+        &request,
+        Sampling::ornith(),
+        ReasoningEffort::Low,
+        Flavor::Llama,
+    );
+    assert!(llama.pointer("/messages/1/reasoning_content").is_none());
+}
+
+#[test]
+fn openai_flavor_echoes_empty_reasoning_too() {
+    let request = request(
+        vec![Message::Assistant {
+            content: String::new(),
+            reasoning: String::new(),
+            tool_calls: Vec::new(),
+        }],
+        Vec::new(),
+    );
+    let openai = request_body(
+        "m",
+        &request,
+        Sampling::ornith(),
+        ReasoningEffort::Low,
+        Flavor::OpenAi,
+    );
+    // O campo tem de estar presente (vazio), não ausente.
+    assert_eq!(
+        openai.pointer("/messages/1/reasoning_content"),
+        Some(&serde_json::json!(""))
     );
 }

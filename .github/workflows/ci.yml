@@ -1,21 +1,80 @@
 name: ci
 
+# Push em qualquer branch + PRs. Inspirado no REF/sniff-css/.github/workflows/ci.yml.
 on:
   push:
   pull_request:
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.99
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
       - name: Portão único (fmt + clippy -D warnings + test + firewall + tamanho)
         run: make check
       - name: Métricas por função (feature instrument)
         run: cargo test -p ktu-core --features instrument
+
+  msrv:
+    name: MSRV (rust-version = 1.99)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99
+      - uses: Swatinem/rust-cache@v2
+      # O `rust-version` do workspace é 1.99; este alvo garante que o código
+      # compila com ele mesmo quando o alvo `check` passar a `stable`.
+      - run: cargo check --workspace --all-targets --locked
+
+  dist:
+    name: empacotamento (scripts/dist.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99
+      - uses: Swatinem/rust-cache@v2
+      - run: ./scripts/dist.sh
+
+  supply-chain:
+    name: deny + audit + machete + typos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-deny cargo-audit cargo-machete --locked
+      - run: cargo deny check
+      - run: cargo audit
+      - run: cargo machete
+      - uses: crate-ci/typos@master
+
+  miri:
+    name: miri (núcleo puro, smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo miri setup
+      # Só a suíte `tests/miri_smoke.rs` (segundos): o núcleo é `#![forbid(unsafe_code)]`
+      # e a cobertura funcional fica no job `check`.
+      - run: cargo miri test -p ktu-core --test miri_smoke
+        env:
+          MIRIFLAGS: "-Zmiri-disable-isolation"

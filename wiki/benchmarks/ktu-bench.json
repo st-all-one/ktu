@@ -1,0 +1,54 @@
+{
+  "binary": {
+    "ktu_release_bytes": 6029872
+  },
+  "host": {
+    "arch": "x86_64",
+    "cpu": "AMD Ryzen 5 5500U with Radeon Graphics",
+    "os": "linux",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)"
+  },
+  "memory": {
+    "peak_rss_kib": 8292
+  },
+  "samples": {
+    "derive_messages_100": {
+      "iterations": 500,
+      "max_micros": 18,
+      "median_micros": 6,
+      "min_micros": 5
+    },
+    "derive_messages_10k": {
+      "iterations": 50,
+      "max_micros": 1577,
+      "median_micros": 565,
+      "min_micros": 495
+    },
+    "derive_messages_1k": {
+      "iterations": 200,
+      "max_micros": 171,
+      "median_micros": 50,
+      "min_micros": 48
+    },
+    "log_build_1k": {
+      "iterations": 200,
+      "max_micros": 67,
+      "median_micros": 45,
+      "min_micros": 44
+    },
+    "turn_1_step": {
+      "iterations": 200,
+      "max_micros": 38,
+      "median_micros": 6,
+      "min_micros": 4
+    },
+    "turn_8_steps": {
+      "iterations": 100,
+      "max_micros": 14,
+      "median_micros": 12,
+      "min_micros": 11
+    }
+  },
+  "schema": 1,
+  "tool": "cargo bench -p ktu-core --bench core"
+}

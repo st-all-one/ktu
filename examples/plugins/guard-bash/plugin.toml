@@ -1,0 +1,5 @@
+name = "guard-bash"
+entrypoint = "./run.sh"
+events = ["action.before"]
+mode = "gate"
+timeout_ms = 2000
