@@ -1,0 +1,8 @@
+[package]
+name = "g10-alvo"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Workspace proprio: o alvo do gate e copiado para `.ktu/gates/` (dentro do repo).
+[workspace]

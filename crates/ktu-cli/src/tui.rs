@@ -5,17 +5,18 @@
 
 use std::time::Duration;
 
-use ktu_core::session::Event;
 use ktu_port::HttpPort;
 use ktu_port::port::Port;
 use ktu_port::protocol::ServerMsg;
 use ratatui::crossterm::event::{self, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Style as TuiStyle};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Paragraph, Wrap};
 use tokio::runtime::Builder;
 use tokio::time::sleep;
+
+use crate::render::describe;
 
 /// Corre a TUI ligada a `server` (URL base) na sessão `session`.
 ///
@@ -121,74 +122,16 @@ fn draw(frame: &mut ratatui::Frame<'_>, log: &[String], input: &str) {
     frame.render_widget(
         Paragraph::new(input)
             .block(Block::bordered().title("prompt — Enter envia · q sai"))
-            .style(Style::default().fg(Color::Yellow)),
+            .style(TuiStyle::default().fg(Color::Yellow)),
         input_area,
     );
 }
 
-/// Texto estável de um evento do log.
-fn describe(event: &Event) -> String {
-    match event {
-        Event::TurnStart { prompt } => format!("» {prompt}"),
-        Event::Assistant {
-            content,
-            tool_calls,
-            ..
-        } => {
-            if tool_calls.is_empty() {
-                format!("agente: {content}")
-            } else {
-                format!("agente: {} chamada(s) de tool", tool_calls.len())
-            }
-        }
-        Event::ToolResult {
-            name,
-            content,
-            is_error,
-            ..
-        } => {
-            let mark = if *is_error { "x" } else { "ok" };
-            format!("  [{mark}] {name}: {}", truncate(content, 160))
-        }
-        Event::GuardDecision {
-            tool,
-            allowed,
-            reason,
-        } => {
-            let mark = if *allowed { "allow" } else { "deny" };
-            format!("  guard {mark} {tool} ({reason})")
-        }
-        Event::TurnEnd { reason } => format!("— fim: {reason:?}"),
-        Event::ModeSet { mode } => format!("modo: {mode:?}"),
-        Event::PluginDispatch {
-            hook,
-            generation,
-            allowed,
-            reason,
-        } => {
-            let mark = if *allowed { "pass" } else { "deny" };
-            let detail = reason.as_deref().unwrap_or("");
-            format!("  hook {mark} {hook} gen={generation} {detail}")
-        }
-    }
-}
-
-/// Trunca preservando fronteiras de caractere.
-fn truncate(text: &str, max: usize) -> String {
-    if text.chars().count() <= max {
-        return text.to_owned();
-    }
-    let mut truncated: String = text.chars().take(max).collect();
-    truncated.push('…');
-    truncated
-}
-
 #[cfg(test)]
 mod tests {
+    use super::describe;
     use ktu_core::domain::StopReason;
     use ktu_core::session::Event;
-
-    use super::{describe, truncate};
 
     #[test]
     fn describes_events_compactly() {
@@ -200,11 +143,5 @@ mod tests {
             reason: StopReason::EndTurn,
         });
         assert!(end.starts_with("— fim:"));
-    }
-
-    #[test]
-    fn truncates_with_ellipsis() {
-        assert_eq!(truncate("abcdef", 3), "abc…");
-        assert_eq!(truncate("abc", 3), "abc");
     }
 }

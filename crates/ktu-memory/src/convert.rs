@@ -3,10 +3,12 @@
 //! Fica separado do adaptador (`store.rs`) para manter cada ficheiro pequeno e o
 //! adaptador focado no protocolo (recall/escrita/dedup).
 
-use knudge_core::schema::{Frontmatter, NoteType, Value};
+use knudge_core::schema::{Frontmatter, NoteType, Provenance, Value};
 use knudge_core::store::Note;
 use knudge_core::write::Draft;
 use ktu_core::memory::{MemoryDraft, MemoryError, MemoryKind, MemoryResult};
+
+use crate::AGENT;
 
 /// Funde `incoming` em `target` (tags, âncoras e corpo), com revisão+1.
 pub(crate) fn merge_into(target: &Note, incoming: &Note) -> MemoryResult<Note> {
@@ -70,8 +72,8 @@ fn set_list(frontmatter: &mut Frontmatter, key: &str, items: &[String]) -> Memor
         .map_err(|error| map_knudge(&error))
 }
 
-/// Traduz a espécie do ktu para o tipo fechado do `knudge`.
-pub(crate) fn to_knudge_draft(draft: &MemoryDraft) -> Draft {
+/// Traduz a espécie do ktu para o tipo fechado do `knudge` e marca a proveniência.
+pub(crate) fn to_knudge_draft(draft: &MemoryDraft, activity: &str) -> Draft {
     let note_type = match draft.kind {
         MemoryKind::Fact => NoteType::Fact,
         MemoryKind::Decision => NoteType::Decision,
@@ -87,6 +89,13 @@ pub(crate) fn to_knudge_draft(draft: &MemoryDraft) -> Draft {
     knudge_draft.body.clone_from(&draft.body);
     knudge_draft.tags.clone_from(&draft.tags);
     knudge_draft.anchors.clone_from(&draft.anchors);
+    // Proveniência PROV-lite (D207): **quem** produziu a nota. O ktu é sempre o produtor; a
+    // actividade distingue a escrita directa (`write`) da projeção do log (`derive`).
+    knudge_draft.provenance = Provenance {
+        entity: None,
+        activity: Some(activity.to_owned()),
+        agent: Some(AGENT.to_owned()),
+    };
     knudge_draft
 }
 

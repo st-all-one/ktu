@@ -1,6 +1,9 @@
 # Receitas reutilizáveis (recipes)
 
-- **Estado:** candidata (do `goose`) — a decidir.
+- **Estado:** **incorporada** (H10) — `.agents/commands/*.md` + `/nome args`, `settings`
+  (`provider`/`base_url`/`model`/`max_steps`), argumentos `$1`…`$9`/`$ARGUMENTS`, *shell* opt-in
+  (`shell: true`) expandido **depois** dos guardrails, e `ktu run --command <nome> [args]`.
+  Continuam fora `sub_recipes` e `parameters` declarados (sem consumidor).
 - **Origem:** `REF/goose/crates/goose/src/recipe`, `documentation/docs/guides/recipes/`;
   `wiki/revisao-goose.md` §2.1.
 - **Âncora:** `.agents/`, `crates/ktu-cli/src/run.rs`, `crates/ktu-core/src/plan.rs`.

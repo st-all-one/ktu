@@ -1,6 +1,6 @@
 # Recusa acionável (`remedy` por regra)
 
-- **Estado:** candidata (do `katu`, Q-08) — **incorporar**.
+- **Estado:** **implementado** (H5) — remédio **estrutural** por `DenyReason`; o remédio *por regra* fica adiado (A6).
 - **Origem:** `REF/katu/wiki/_ref/plan/OPTIMIZATION_PLAN.md` (Q-07/Q-08);
   `wiki/revisao-katu.md` §3.5.
 - **Âncora:** `crates/ktu-core/src/guardrails.rs`, `crates/ktu-core/src/guard.rs`.

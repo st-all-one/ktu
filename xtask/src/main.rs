@@ -2,10 +2,16 @@
 //!
 //! Alvos:
 //! - `check-layers`: impõe o firewall de dependências entre camadas (§2.1 do `plan.md`).
+//! - `check-adr`: valida os registos de governança (`wiki/adr/`, `wiki/postmortems/`).
+//! - `check-surface`: impõe o teto de superfície pública (`surface.toml`).
+//! - `gates`: corre os gates da Fase 2 (G10–G15) e arquiva os artefactos.
 //! - `quality`: corre a bateria de qualidade `p1`–`p4` com o ktu isolado (F5/G4).
 #![forbid(unsafe_code)]
 
+mod gates;
+mod governance;
 mod quality;
+mod surface;
 
 use std::collections::BTreeSet;
 use std::env;
@@ -18,11 +24,17 @@ fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("check-layers") => check_layers(),
+        Some("check-adr") => governance::check(),
+        Some("check-surface") => surface::check(),
+        Some("gates") => gates::run(args.get(1..).unwrap_or(&[])),
         Some("quality") => quality::run(args.get(1..).unwrap_or(&[])),
         Some(other) => Err(format!(
-            "alvo desconhecido: `{other}` (disponíveis: check-layers, quality)"
+            "alvo desconhecido: `{other}` (disponíveis: check-adr, check-layers, check-surface, gates, quality)"
         )),
-        None => Err("alvo ausente (disponíveis: check-layers, quality)".to_owned()),
+        None => Err(
+            "alvo ausente (disponíveis: check-adr, check-layers, check-surface, quality)"
+                .to_owned(),
+        ),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

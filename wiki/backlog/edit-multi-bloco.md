@@ -1,6 +1,6 @@
 # `edit` multi-bloco atómico
 
-- **Estado:** candidata (do `katu`, Q-07) — **incorporar**.
+- **Estado:** **implementado** (H5; `wiki/implementation_phase2/H5-fiabilidade-loop.md`).
 - **Origem:** `REF/katu/wiki/_ref/plan/OPTIMIZATION_PLAN.md` (Q-07); `wiki/revisao-katu.md` §3.11.
 - **Âncora:** `crates/ktu-tools/src/fs_tools.rs`.
 

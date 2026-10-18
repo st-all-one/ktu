@@ -1,9 +1,29 @@
-# STAGING — Estado do épico ktu (revisão 2026-10-15)
+# STAGING — Estado do épico ktu (revisão 2026-10-18)
 
-> Documento de staging: fotografia do estado após o fecho do **Gate G4**.
+> Documento de staging: fotografia do estado após o fecho do **Gate G4** e, na revisão de
+> 2026-10-18, da **Fase 2** (H0–H12, gates G10–G15 verdes — ver [`wiki/gates/`](wiki/gates/README.md)).
 > Fontes: `epic.md`, `plan.md`, `wiki/quality_test/ktu-veredicto.md` e a memória `kd`.
+> **O inverso deste documento** (o que falta, porquê, e o que reabre cada item) é o
+> [dossiê de pendências](wiki/pendencias.md). As decisões com alternativas vivem em
+> [`wiki/adr/`](wiki/adr/README.md).
 > Portão único: `make check` (`fmt` + `clippy -D warnings` + `test` + `check-layers`
-> + `file-length`). Verificado **verde** nesta revisão.
+> + `check-adr` + `check-surface` + `file-length`). Verificado **verde** nesta revisão, com
+> `make gates` (G10–G15) e `make supply-chain` também verdes.
+
+## 0. Fase 2 — fechada ✅ (2026-10-18)
+
+| Issue | Entrega | Estado |
+|---|---|---|
+| H0–H6 | superfície CLI, `init`, config, efémero/lock, REPL, fiabilidade, controlo | fechadas |
+| H7–H8 | eixo de memória (knudge) e embeddings opcionais | fechadas |
+| H9 | fachada de incorporação (`ktu_core::facade`) + `examples/ktu-embed` | fechada |
+| H10 | convenções (`SYSTEM.md`, `AGENTS.md` aninhados, comandos, agentes, título) | fechada |
+| H11 | governança (ADRs, postmortems, dossiê, medição, teto de superfície) | fechada |
+| H12 | gates G10–G15 (artefactos em `wiki/gates/`) | fechada |
+
+**Fase 3** (adiados por YAGNI, com critério de reabertura) em
+[`wiki/implementation_phase2/ADIADOS.md`](wiki/implementation_phase2/ADIADOS.md) e no
+[dossiê de pendências](wiki/pendencias.md).
 
 ## 1. Gate G4 — confirmado fechado ✅
 

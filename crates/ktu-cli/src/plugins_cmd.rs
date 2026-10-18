@@ -10,14 +10,15 @@ use ktu_core::plugin::Hooks;
 use ktu_plugin::PluginHost;
 
 use crate::cli::PluginsAction;
+use crate::output::{self, Format};
 use crate::root_or_cwd;
 
 /// Executa a acção pedida.
-pub(crate) fn run(action: PluginsAction) -> ExitCode {
+pub(crate) fn run(action: PluginsAction, format: Format) -> ExitCode {
     match action {
-        PluginsAction::List { root } => list(&root_or_cwd(root)),
-        PluginsAction::Reload { root } => reload(&root_or_cwd(root)),
-        PluginsAction::Doctor { root } => doctor(&root_or_cwd(root)),
+        PluginsAction::List { root } => list(&root_or_cwd(root), format),
+        PluginsAction::Reload { root } => reload(&root_or_cwd(root), format),
+        PluginsAction::Doctor { root } => doctor(&root_or_cwd(root), format),
     }
 }
 
@@ -26,16 +27,23 @@ fn host(root: &Path) -> PluginHost {
     PluginHost::load(root.join(".ktu").join("plugins"))
 }
 
-/// Imprime a geração e os plugins activos.
-fn print_state(host: &PluginHost) {
-    let mut out = io::stdout().lock();
-    let _ignored = writeln!(out, "geracao {}", host.generation());
-    for name in host.names() {
-        let _ignored = writeln!(out, "{name}");
-    }
+/// Estado do host como dado (envelope JSON).
+fn state_data(host: &PluginHost) -> serde_json::Value {
+    serde_json::json!({
+        "generation": host.generation(),
+        "names": host.names(),
+        "errors": host.errors(),
+    })
 }
 
-/// Escreve em `stderr` os erros de manifesto.
+/// Texto humano do estado (geração + nomes).
+fn state_text(host: &PluginHost) -> String {
+    let mut lines = vec![format!("geracao {}", host.generation())];
+    lines.extend(host.names().iter().cloned());
+    lines.join("\n")
+}
+
+/// Escreve em `stderr` os erros de manifesto (logs).
 fn report_errors(errors: &[String]) {
     let mut err = io::stderr().lock();
     for error in errors {
@@ -43,29 +51,49 @@ fn report_errors(errors: &[String]) {
     }
 }
 
-fn list(root: &Path) -> ExitCode {
+fn list(root: &Path, format: Format) -> ExitCode {
     let host = host(root);
-    print_state(&host);
+    output::emit(
+        format,
+        "plugins list",
+        &state_text(&host),
+        &state_data(&host),
+    );
     report_errors(&host.errors());
     ExitCode::SUCCESS
 }
 
-fn reload(root: &Path) -> ExitCode {
+fn reload(root: &Path, format: Format) -> ExitCode {
     let host = host(root);
     let errors = host.reload();
-    print_state(&host);
+    output::emit(
+        format,
+        "plugins reload",
+        &state_text(&host),
+        &state_data(&host),
+    );
     report_errors(&errors);
     ExitCode::SUCCESS
 }
 
-fn doctor(root: &Path) -> ExitCode {
+fn doctor(root: &Path, format: Format) -> ExitCode {
     let host = host(root);
     let errors = host.errors();
     if errors.is_empty() {
-        let mut out = io::stdout().lock();
-        let _ignored = writeln!(out, "plugins: ok (geracao {})", host.generation());
+        output::emit(
+            format,
+            "plugins doctor",
+            &format!("plugins: ok (geracao {})", host.generation()),
+            &state_data(&host),
+        );
         ExitCode::SUCCESS
     } else {
+        output::emit(
+            format,
+            "plugins doctor",
+            &state_text(&host),
+            &state_data(&host),
+        );
         report_errors(&errors);
         ExitCode::FAILURE
     }

@@ -11,9 +11,11 @@ pub mod memory_tools;
 mod path;
 pub mod read_file;
 mod search;
+pub mod text;
 pub mod tool_thread;
 mod toolbox;
 pub mod trash;
+pub mod truncate;
 
 pub mod agents;
 pub use agents::{SUBAGENT_TOOL, default_registry, plan_mode_spec, read_only_tool_names};

@@ -1,6 +1,6 @@
 # Prompt de `MaxSteps`
 
-- **Estado:** candidata (do `opencode`) — **incorporar**.
+- **Estado:** **implementado** (H5; `wiki/implementation_phase2/H5-fiabilidade-loop.md`).
 - **Origem:** `REF/opencode/packages/core/src/session/runner/max-steps.ts`;
   `wiki/revisao-opencode-profunda.md` §1.4.
 - **Âncora:** `crates/ktu-core/src/agent/mod.rs`, `crates/ktu-core/src/domain.rs`.

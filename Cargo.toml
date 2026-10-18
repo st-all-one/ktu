@@ -17,6 +17,7 @@ members = [
     "crates/ktu-plugin",
     "crates/ktu-cli",
     "xtask",
+    "examples/ktu-embed",
 ]
 # `REF/` é material de referência (não faz parte do workspace ktu); excluí-lo
 # evita que o workspace aninhado do `knudge` seja absorvido pelo ktu.
@@ -47,6 +48,7 @@ axum = "0.8"
 ratatui = "0.30"
 # CLI / logs
 clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
 toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }

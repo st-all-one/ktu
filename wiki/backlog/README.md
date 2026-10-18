@@ -8,6 +8,24 @@
 > classifica estas 123 páginas em tiers e propõe um backlog activo de ~24 itens (o resto é
 > bibliografia).
 >
+> 🧭 **Revisão por propósito** ([`revisao-proposito.md`](../revisao-proposito.md)): re-tria o
+> backlog pelas **4 utilizações** (crate · pipeline · conversa longa · config do projecto) e pelos
+> invariantes M1–M6 (mínimo · kernel · seguro · independente do caminho · controlo determinístico ·
+> project-bound).
+>
+> 🔗 **Duplicatas fundidas:** [`consolidado.md`](./consolidado.md) — 36 páginas → **15 decisões**.
+>
+> 🧩 **Eixo de memória (agent-agnostic):** [`../knudge-eixo-memoria.md`](../knudge-eixo-memoria.md) —
+> o knudge como fonte única estruturada, independente do agente.
+>
+> 🗺️ **Fase 2 (execução):** [`../implementation_phase2/`](../implementation_phase2/README.md) —
+> épico `epic_01j7ou2p`, 12 issues (H0–H11), 48 tarefas, ancoradas a estas páginas.
+>
+> ➕ **Novas (caminhos):** [cli-superficie](./cli-superficie.md) · [cli-repl](./cli-repl.md) ·
+> [modo-efemero](./modo-efemero.md) · [config-global](./config-global.md) ·
+> [ktu-init](./ktu-init.md) · [memory-drain-service](./memory-drain-service.md) ·
+> [crate-facade](./crate-facade.md).
+>
 > Regra herdada (`plan.md` §0/§2.12): *cada subsistema só entra com um consumidor
 > actual e um teste que o exija*. Cada página diz **o que falta para reconsiderar**.
 
@@ -287,6 +305,7 @@ migração do `ktu-memory` (que apontava a referência antiga `REF/knudge` 0.5.4
 | 121 | [Porta `Embedder` (canal semântico)](./knudge-embeddings.md) | candidata | avaliar |
 | 122 | [Configuração em dois níveis (global/projeto)](./knudge-config.md) | candidata | avaliar (consolida 76) |
 | 123 | [`git::sync` (versionar a memória)](./knudge-git-sync.md) | candidata | avaliar (consolida 16) |
+| 124 | [`kd ai` (memória/logs do agente) + fonte JSONL read-only](./kd-ai.md) | candidata | avaliar (condicional) |
 
 Consolidam-se com páginas existentes: **graph avançado** (119) → [2 — auditoria-densa](./auditoria-densa.md);
 **lifecycle** (120) → [6 — contexto-rate-distortion](./contexto-rate-distortion.md); **embeddings**
@@ -295,10 +314,31 @@ Consolidam-se com páginas existentes: **graph avançado** (119) → [2 — audi
 [16 — git-versionado](./git-versionado.md).
 
 Não adoptar: o binário `kd` e o `knudge-mcp` como dependências de runtime (o ktu tem a sua porta;
-MCP é YAGNI §0), a CLI/envelope do knudge e o serviço de embeddings (`drain service`).
+MCP é YAGNI §0) e a CLI/envelope do knudge. **Reversão:** o serviço de embeddings
+(`drain service`) deixou de ser "não adoptar" — passa a **opcional e incentivado**
+([memory-drain-service](./memory-drain-service.md)).
 
 > **Dois papéis distintos:** a **memória de desenvolvimento do ktu** (`.knudge/` + `kd`, já em uso)
 não se confunde com o **motor de memória do agente ktu** (`ktu-memory`, hoje *thin*).
+
+## Proposta de backlog integrada (por eixo)
+
+O backlog passa a ser **do projecto** (não uma lista de referenciais), organizado por **eixo de
+propósito**. Detalhe e racional em [revisão por propósito](../revisao-proposito.md) §6.
+
+| Eixo | Itens |
+|---|---|
+| **0. Caminhos (4 utilizações)** | [cli-superficie](./cli-superficie.md) · [cli-repl](./cli-repl.md) · [modo-efemero](./modo-efemero.md) · [config-global](./config-global.md) · [ktu-init](./ktu-init.md) · [memory-drain-service](./memory-drain-service.md) · [crate-facade](./crate-facade.md) |
+| **1. Fiabilidade do loop** | 75 · 96 · 95 · 70 · 68 · 106 · 65 · [G15/67](./consolidado.md) · [G3/94](./consolidado.md) |
+| **2. Controlo determinístico** | [G7/21](./consolidado.md) · [G14/42](./consolidado.md) · [G8/1](./consolidado.md) (seam) |
+| **3. Config project-bound** | [G9/76](./consolidado.md) · 93 · 97 · 51 · 52 |
+| **4. Convenções** | [G1/41](./consolidado.md) · 20 · 84 |
+| **5. Memória** | 114 · 115 · 116 |
+| **6. Governança (processo)** | 59 · 60 · 61 |
+| **7. Cogitável (medir)** | [revisão por propósito](../revisao-proposito.md) §5.2 |
+| **8. Arquivo** | [revisão por propósito](../revisao-proposito.md) §5.3 + [consolidado](./consolidado.md) |
+
+**Activo:** eixos 0–6 (~28 itens). O resto é bibliografia.
 
 ## Como decidir
 

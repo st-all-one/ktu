@@ -27,6 +27,13 @@ pub enum Error {
         #[source]
         source: serde_json::Error,
     },
+    /// Entrada inválida (config, guardrails, permissões): o arranque **falha
+    /// alto** em vez de degradar (I16).
+    #[error("entrada invalida: {message}")]
+    Invalid {
+        /// Descrição legível do problema (nomeia o ficheiro quando aplicável).
+        message: String,
+    },
 }
 
 impl Error {
@@ -45,6 +52,14 @@ impl Error {
         Self::Json {
             context: context.into(),
             source,
+        }
+    }
+
+    /// Cria um erro de entrada inválida (fail-closed).
+    #[must_use]
+    pub fn invalid(message: impl Into<String>) -> Self {
+        Self::Invalid {
+            message: message.into(),
         }
     }
 }

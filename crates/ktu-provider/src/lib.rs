@@ -4,9 +4,13 @@
 //! parseado em deltas. Tool-calls nativas quando o template do modelo suporta;
 //! *fallback* para parsing de tool-call em texto. Outros providers só via GDK
 //! (feature `gdk`), num crate separado (§2.5 do `plan.md`).
+//!
+//! Também vive aqui o adaptador HTTP da porta de **embeddings** (H8), que fala com o
+//! `llama-server` de embeddings (OpenAI-compatible, porta 8889).
 #![forbid(unsafe_code)]
 
 pub mod doctor;
+pub mod embed;
 pub mod fallback;
 pub mod gguf;
 pub mod llama;
@@ -16,6 +20,7 @@ pub mod stream;
 pub mod wire;
 
 pub use doctor::{DoctorReport, Probe, diagnose};
+pub use embed::HttpEmbedder;
 pub use gguf::GgufMeta;
 pub use llama::{DEFAULT_BASE_URL, LlamaConfig, LlamaProvider};
 pub use sampling::{ReasoningEffort, Sampling};

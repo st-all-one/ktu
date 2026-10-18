@@ -1,6 +1,6 @@
 # Steering / follow-up messages
 
-- **Estado:** candidata (do `pi`) — **avaliar**.
+- **Estado:** **implementado** (H6+) — steering entregue na fronteira segura, logado (`Event::Steer`) e exposto na porta (`Host::steer`); o REPL lê stdin numa thread dedicada e drena sem bloquear entre eventos.
 - **Origem:** `REF/pi/packages/coding-agent/docs/how-pi-works.md`; `wiki/revisao-pi.md` §2.3.
 - **Âncora:** `crates/ktu-port/src/protocol.rs`, `crates/ktu-core/src/agent/mod.rs`.
 

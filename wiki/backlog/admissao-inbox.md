@@ -1,6 +1,6 @@
 # Admissão durável de prompts (inbox) + `steer`/`queue`
 
-- **Estado:** candidata (do `opencode`) — **incorporar**.
+- **Estado:** **parcial** (A8, `task_01vw262v`) — o steering já é entregue/logado; falta o enfileiramento durável *antes* da entrega e a idempotência por ID.
 - **Origem:** `REF/opencode/specs/v2/session.md`,
   `packages/core/src/session/inbox.ts`; `wiki/revisao-opencode-profunda.md` §1.2.
 - **Âncora:** `crates/ktu-core/src/session/mod.rs`, `crates/ktu-port/`.

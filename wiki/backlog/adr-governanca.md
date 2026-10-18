@@ -1,6 +1,8 @@
 # ADRs (Architecture Decision Records)
 
-- **Estado:** candidata (do `katu`) — **incorporar**.
+- **Estado:** **incorporada** (H11) — `wiki/adr/` (17 ADRs, contrato de 4 secções com
+  `Alternatives considered`, substituição ligada nos dois sentidos) + `wiki/postmortems/`
+  (PM-0001–PM-0003), com gate próprio (`xtask check-adr` no `make check`).
 - **Origem:** `REF/katu/wiki/_ref/adr/` (27 ADRs); `wiki/revisao-katu.md` §1.1.
 - **Âncora:** `plan.md`, `STAGING.md`, `wiki/`.
 

@@ -1,6 +1,6 @@
 # Normalização de line-endings/BOM no `edit`
 
-- **Estado:** candidata (do `pi`) — **incorporar**.
+- **Estado:** **implementado** (H5; `wiki/implementation_phase2/H5-fiabilidade-loop.md`).
 - **Origem:** `REF/pi/packages/coding-agent/src/core/tools/edit-diff.ts`,
   `utils/text.ts` (`splitBom`); `wiki/revisao-pi-profunda.md` §1.4.
 - **Âncora:** `crates/ktu-tools/src/fs_tools.rs`.

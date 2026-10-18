@@ -121,6 +121,8 @@ pub enum StopReason {
     MaxSteps,
     /// Sem progresso repetido (detecção de estagnação).
     Stalled,
+    /// O modelo repetiu o pedido ou uma resposta anterior (eco, G5).
+    Echo,
     /// Cancelado pelo utilizador.
     Cancelled,
     /// Erro do kernel ou do provider.

@@ -22,6 +22,10 @@ pub const MODEL_OUTPUT: &str = "model.output";
 pub const TOOL_CALL: &str = "tool.call";
 /// Resultado de tool.
 pub const TOOL_RESULT: &str = "tool.result";
+/// Tool **diferida** carregada por `tool_search` (passa ao catálogo do próximo pedido).
+pub const TOOL_LOADED: &str = "tool.loaded";
+/// Instruções locais (`AGENTS.md` mais próximo) anexadas a uma leitura.
+pub const CONTEXT_LOCAL: &str = "context.local";
 /// Decisão de guardrail (`Allow`/`Deny`/`Escalate`) — a evidência da tese.
 pub const GUARD_DECISION: &str = "guard.decision";
 /// Erro interno do kernel.
@@ -38,6 +42,8 @@ pub const SERVER_START: &str = "server.start";
 pub const PLUGIN_DISPATCH: &str = "plugin.dispatch";
 /// Ciclo de vida de um plugin (carregado, recarregado, errado — §2.9).
 pub const PLUGIN_LIFECYCLE: &str = "plugin.lifecycle";
+/// Mensagem de *steering* entregue ao modelo numa fronteira segura.
+pub const STEER: &str = "turn.steer";
 
 /// Todos os ids conhecidos, para validação e *goldens*.
 pub const ALL: &[&str] = &[
@@ -58,4 +64,5 @@ pub const ALL: &[&str] = &[
     SERVER_START,
     PLUGIN_DISPATCH,
     PLUGIN_LIFECYCLE,
+    STEER,
 ];

@@ -18,6 +18,7 @@ pub fn summarize(events: &[Event]) -> String {
     for event in events {
         match event {
             Event::TurnStart { prompt } => prompts.push(truncate(prompt)),
+            Event::Steer { text } => prompts.push(truncate(text)),
             Event::Assistant { tool_calls, .. } => {
                 tools = tools.saturating_add(tool_calls.len());
             }

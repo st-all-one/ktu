@@ -38,16 +38,38 @@ pub struct SubagentReport {
 pub trait SubagentHost: Send + Sync {
     /// Corre (ou retoma) a sessão-filha e devolve o relatório final.
     async fn run(&self, request: SubagentRequest) -> Result<SubagentReport, String>;
+
+    /// Nomes dos subagentes disponíveis (para o catálogo do modelo).
+    ///
+    /// Por omissão, vazio: a descrição da tool não enumera nomes.
+    fn agents(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// Especificação da tool `subagent` oferecida ao modelo.
 #[must_use]
 pub fn spec() -> ToolSpec {
+    spec_with(&[])
+}
+
+/// Especificação da tool `subagent` com os nomes de agentes disponíveis.
+///
+/// A lista de nomes entra na **descrição** (o modelo não adivinha): é derivada
+/// dos agentes registados, em ordem determinística.
+#[must_use]
+pub fn spec_with(agents: &[String]) -> ToolSpec {
+    let description = if agents.is_empty() {
+        "Delega uma exploracao a um subagente e devolve o relatorio final.".to_owned()
+    } else {
+        format!(
+            "Delega uma exploracao a um subagente (disponiveis: {}) e devolve o relatorio final.",
+            agents.join(", ")
+        )
+    };
     ToolSpec {
         name: TOOL.to_owned(),
-        description:
-            "Delega uma exploracao read-only a um subagente (ex.: explorer) e devolve o relatorio final."
-                .to_owned(),
+        description,
         parameters: r#"{"type":"object","properties":{"agent":{"type":"string"},"description":{"type":"string"},"prompt":{"type":"string"},"session_id":{"type":"string"}},"required":["agent","prompt"]}"#
             .to_owned(),
     }
@@ -100,7 +122,16 @@ pub fn cap_report(text: &str, max_chars: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{cap_report, parse_request};
+    use super::{cap_report, parse_request, spec, spec_with};
+
+    #[test]
+    fn spec_lists_the_available_agents() {
+        assert!(!spec().description.contains("disponiveis"));
+        let with = spec_with(&["explorer".to_owned(), "rev".to_owned()]);
+        assert!(with.description.contains("disponiveis: explorer, rev"));
+        assert_eq!(with.name, "subagent");
+        assert_eq!(spec_with(&[]).description, spec().description);
+    }
 
     #[test]
     fn parses_minimal_request() {

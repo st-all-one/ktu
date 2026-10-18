@@ -20,6 +20,10 @@ if [ ! -x "$SERVER" ]; then
   exit 1
 fi
 
+# As bibliotecas do llama.cpp vivem ao lado do binário: sem isto o carregador
+# dinâmico falha (`libllama-server-impl.so: cannot open shared object file`).
+export LD_LIBRARY_PATH="$(dirname "$SERVER")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
 # -fa on + KV q8_0: poupa RAM no host CPU-only (17 GiB, sem GPU dedicada).
 exec "$SERVER" \
   -m "$MODEL" \

@@ -7,17 +7,26 @@
 #![forbid(unsafe_code)]
 
 pub mod agent;
+pub mod agent_file;
+pub mod agents_md;
 pub mod budget;
 pub mod cancel;
 pub mod checkpoint;
+pub mod command;
 pub mod compact;
+pub mod config;
 pub mod domain;
 pub mod error;
 pub mod events;
+pub mod facade;
+pub mod frontmatter;
+pub mod git;
 pub mod guard;
 pub mod guardrails;
 pub mod layout;
 pub mod memory;
+pub mod memory_config;
+pub mod permission;
 pub mod plan;
 pub mod plugin;
 pub mod ports;
@@ -28,9 +37,13 @@ pub mod store;
 pub mod subagent;
 pub mod taint;
 pub mod testing;
+pub mod tool_search;
 pub mod tools;
 
 pub use error::{Error, Result};
+pub use facade::{Ktu, KtuBuilder, TurnOutcome};
+pub use memory_config::{EmbeddingProvider, Embeddings, MemoryConfig};
+pub use session::{Event, SessionLog};
 
 /// Versão do crate, herdada do workspace.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

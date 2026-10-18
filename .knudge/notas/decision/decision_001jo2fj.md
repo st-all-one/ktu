@@ -1,0 +1,11 @@
+---
+id: decision_001jo2fj
+type: decision
+statement: "Reversao de decision_01noh28j: A9, A10 e A11 implementados antes da H11 a pedido do dono"
+created_at: 2026-10-18T03:20:37.483Z
+body_hash: 599bd940
+schema_version: 2
+revision: 2
+anchors: [wiki/implementation_phase2/ADIADOS.md, wiki/implementation_phase2/H10-convencoes.md, wiki/convencoes.md, wiki/adr/0017-implementar-a9-a11-antes-da-h11.md]
+---
+O dono do projecto pediu explicitamente para implementar o que faltava antes de prosseguir para a H11, revertendo a decisao decision_01noh28j (que adiava A9/A10/A11 por YAGNI). Os tres ficaram implementados e provados: (1) A9 - receitas com settings do frontmatter, argumentos $1..$9 e shell opt-in expandido DEPOIS de facade::evaluate_fact (o mesmo encadeamento de guardrails da fachada) usando a mesma BashTool, mais ktu run --command; continuam fora sub_recipes e parameters declarados. (2) A10 - deferred_tools em .agents/config.toml, ToolExecutor::deferred, tool_search com BM25 deterministico e promocao para o pedido seguinte registada em tool.loaded (gate provado: tool_counts [2,3,3]). (3) A11 - porta Instructions e anexacao do AGENTS.md mais proximo ao resultado de read_file/edit_file, uma vez por turno e por fonte, com o evento context.local. Alternativas descartadas: (a) manter o adiamento como o plano previa - o dono pediu o contrario e um adiamento que ninguem reabre nao vale nada; (b) implementar so o A9 - os tres partilham a zona e a doc, e deixar dois por fazer manteria a doc a prometer o que nao existe; (c) shell proprio para as receitas - seria um segundo motor de shell fora dos guardrails; (d) tool_search sem registo no log - quebraria model-visible <=> logged (I3). As tarefas da Fase 3 task_00mtxl9i, task_01moxmoz e task_01963li2 foram fechadas; as entradas A9-A11 em ADIADOS.md ficaram como registo (implementado), as notas de backlog passaram a "incorporada" e a decisao ficou em ADR (0016 substituida por 0017). A licao de metodo: o adiamento por YAGNI continua a valer, mas a decisao de adiar e reversivel quando o dono pede explicitamente - e nesse caso o trabalho volta com a mesma disciplina (gate verde, prova por teste e doc no mesmo passo).

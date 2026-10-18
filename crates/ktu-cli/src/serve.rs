@@ -81,6 +81,7 @@ fn router(hub: Hub) -> Router {
         .route("/v1/session/{id}/turn", post(turn))
         .route("/v1/session/{id}/events", get(events))
         .route("/v1/session/{id}/cancel", post(cancel))
+        .route("/v1/session/{id}/steer", post(steer))
         .route("/v1/session/{id}/mode", post(set_mode))
         .with_state(hub)
 }
@@ -116,6 +117,13 @@ struct CreateRequest {
 struct TurnRequest {
     /// Instrução do utilizador.
     prompt: String,
+}
+
+/// Pedido de *steering*.
+#[derive(Deserialize)]
+struct SteerRequest {
+    /// Texto entregue ao modelo.
+    text: String,
 }
 
 /// Pedido de mudança de modo.
@@ -166,6 +174,16 @@ async fn turn(
 /// `POST /v1/session/{id}/cancel`.
 async fn cancel(State(hub): State<Hub>, Path(id): Path<String>) -> Result<StatusCode, ApiError> {
     hub.cancel(&id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /v1/session/{id}/steer` — entrega uma mensagem ao turno em curso.
+async fn steer(
+    State(hub): State<Hub>,
+    Path(id): Path<String>,
+    Json(request): Json<SteerRequest>,
+) -> Result<StatusCode, ApiError> {
+    hub.steer(&id, &request.text).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

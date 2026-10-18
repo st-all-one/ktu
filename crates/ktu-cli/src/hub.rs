@@ -44,6 +44,7 @@ pub(crate) struct Handle {
     events: broadcast::Sender<ServerMsg>,
     cancel: Arc<Mutex<Option<CancelToken>>>,
     snapshot: Arc<Mutex<Snapshot>>,
+    steering: Arc<Mutex<Vec<String>>>,
 }
 
 impl Handle {
@@ -86,6 +87,17 @@ impl Handle {
 
     pub(crate) fn send_event(&self, message: ServerMsg) {
         let _ignored = self.events.send(message);
+    }
+
+    /// Fila de *steering* partilhada com o actor (lida na fronteira de passo).
+    pub(crate) fn steering(&self) -> Arc<Mutex<Vec<String>>> {
+        Arc::clone(&self.steering)
+    }
+
+    /// Enfileira uma mensagem de *steering* (não passa pelo canal de comandos:
+    /// o actor está ocupado a correr o turno).
+    pub(crate) fn enqueue_steering(&self, text: &str) {
+        Self::lock(&self.steering).push(text.to_owned());
     }
 
     fn subscribe(&self) -> broadcast::Receiver<ServerMsg> {
@@ -152,6 +164,7 @@ impl SessionHub {
                 pending: false,
                 log: Vec::new(),
             })),
+            steering: Arc::new(Mutex::new(Vec::new())),
         };
         sessions.insert(session_id.to_owned(), handle.clone());
         drop(sessions);
@@ -217,6 +230,11 @@ impl Host for SessionHub {
 
     async fn cancel(&self, session_id: &str) -> Result<(), PortError> {
         self.handle(session_id)?.request_cancel();
+        Ok(())
+    }
+
+    async fn steer(&self, session_id: &str, text: &str) -> Result<(), PortError> {
+        self.handle(session_id)?.enqueue_steering(text);
         Ok(())
     }
 

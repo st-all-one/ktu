@@ -3,6 +3,7 @@
 //! O loop fala de **uma** porta de tools; aqui juntam-se as de *filesystem* e a
 //! de execução (`bash`).
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use async_trait::async_trait;
@@ -24,6 +25,7 @@ pub struct Toolbox<'a> {
     trash: TrashTool<'a>,
     memory: Option<MemoryTools<'a>>,
     plan: Option<FsPlanHost<'a>>,
+    deferred: BTreeSet<String>,
 }
 
 impl<'a> Toolbox<'a> {
@@ -43,7 +45,16 @@ impl<'a> Toolbox<'a> {
             trash: TrashTool::new(root, fs, clock),
             memory: memory.map(MemoryTools::new),
             plan: None,
+            deferred: BTreeSet::new(),
         }
+    }
+
+    /// Marca tools como **diferidas**: existem e executam, mas não vão no catálogo
+    /// do modelo até `tool_search` as carregar (dado de `.agents/config.toml`).
+    #[must_use]
+    pub fn with_deferred(mut self, names: impl IntoIterator<Item = String>) -> Self {
+        self.deferred = names.into_iter().collect();
+        self
     }
 
     /// Liga a tool `plan` (modo plano) a um host persistente sobre `Fs`.
@@ -54,9 +65,9 @@ impl<'a> Toolbox<'a> {
     }
 }
 
-#[async_trait]
-impl ToolExecutor for Toolbox<'_> {
-    fn specs(&self) -> Vec<ToolSpec> {
+impl Toolbox<'_> {
+    /// Todas as especificações do conjunto (declaradas e diferidas).
+    fn all_specs(&self) -> Vec<ToolSpec> {
         let mut specs = self.fs.specs();
         specs.push(ToolSpec {
             name: "bash".to_owned(),
@@ -73,6 +84,23 @@ impl ToolExecutor for Toolbox<'_> {
             specs.push(plan::spec());
         }
         specs
+    }
+}
+
+#[async_trait]
+impl ToolExecutor for Toolbox<'_> {
+    fn specs(&self) -> Vec<ToolSpec> {
+        self.all_specs()
+            .into_iter()
+            .filter(|spec| !self.deferred.contains(&spec.name))
+            .collect()
+    }
+
+    fn deferred(&self) -> Vec<ToolSpec> {
+        self.all_specs()
+            .into_iter()
+            .filter(|spec| self.deferred.contains(&spec.name))
+            .collect()
     }
 
     async fn execute(&self, call: &ToolCall) -> ToolOutcome {

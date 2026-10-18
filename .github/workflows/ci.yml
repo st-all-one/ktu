@@ -21,6 +21,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Portão único (fmt + clippy -D warnings + test + firewall + tamanho)
         run: make check
+      - name: Gates da Fase 2 (G10–G15, determinísticos)
+        run: make gates
       - name: Métricas por função (feature instrument)
         run: cargo test -p ktu-core --features instrument
 

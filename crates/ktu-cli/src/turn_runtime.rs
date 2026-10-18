@@ -1,58 +1,78 @@
-//! Runtime de **um turno**: compõe as portas e corre o loop.
+//! Runtime de **um turno**: compõe as portas reais e delega na fachada.
 //!
 //! É partilhado pelo modo *embedded* (`ktu run`) e pelo servidor (`ktu serve`),
-//! para não haver duas composições de DI (§2.3).
+//! para não haver duas composições de DI (§2.3). A composição **pura** (guardrails,
+//! permissões, system prompt, orçamento, modo) vive na fachada
+//! [`ktu_core::facade::Ktu`] — aqui só se constroem os **adaptadores** reais.
 
 use std::path::Path;
 
-use ktu_core::agent::{Capabilities, Deps, LoopConfig, Ports, Telemetry, run_turn};
+use ktu_core::Error;
+use ktu_core::agent::{AgentRegistry, LoopConfig, Steering};
+use ktu_core::agent_file;
 use ktu_core::budget::BudgetGate;
 use ktu_core::cancel::CancelToken;
 use ktu_core::domain::StopReason;
 use ktu_core::events;
-use ktu_core::guard::StructuralGuard;
-use ktu_core::guardrails::{self, ChainGuard, DeclarativeGuard};
+use ktu_core::facade::{Ktu, system_prompt_in};
+use ktu_core::layout::AGENTS_FILES_DIR;
 use ktu_core::plan::{FsPlanHost, Mode};
-use ktu_core::ports::{Fs, Level, LogRecord, Logger, NoopMetrics};
-use ktu_core::prompt::{BASE, compose};
+use ktu_core::ports::{Level, LogRecord, Logger, NoopMetrics};
 use ktu_core::session::SessionLog;
-use ktu_core::tools::{ScopedTools, ToolExecutor};
 use ktu_memory::JsonlMemory;
 use ktu_plugin::PluginHost;
 use ktu_tools::{StdFs, ToolThread, Toolbox, default_registry, plan_mode_spec};
 
 use crate::clock::SystemClock;
+use crate::config_cmd::global_dir_path;
+use crate::embeddings;
+use crate::instructions::LocalInstructions;
 use crate::run::{RunConfig, build_provider};
 use crate::subagents::CliSubagents;
-
-/// Tecto de contexto (caracteres) do turno.
-const CONTEXT_BUDGET_CHARS: usize = 120_000;
 
 /// Garante os directórios de runtime do projecto (`.ktu/`, `.agents/memory`).
 ///
 /// # Errors
 /// Devolve mensagem legível se algum directório não puder ser criado.
 pub(crate) fn ensure_layout(root: &Path) -> Result<(), String> {
-    let dirs = [
-        root.join(".ktu").join("sessions"),
+    for dir in [
         root.join(".ktu").join("trash"),
         root.join(".agents").join("memory"),
+        root.join(".agents").join("memory").join(".idx"),
         root.join(".ktu").join("plan"),
-    ];
-    for dir in &dirs {
-        std::fs::create_dir_all(dir)
-            .map_err(|error| format!("nao foi possivel criar {}: {error}", dir.display()))?;
+    ] {
+        ensure_dir(&dir)?;
     }
     Ok(())
 }
 
-/// Compõe o system prompt: base + `AGENTS.md` do projecto (condensado).
-pub(crate) fn compose_system(fs: &dyn Fs, root: &Path) -> String {
-    let agents_md = fs
-        .read(&root.join("AGENTS.md"))
-        .ok()
-        .and_then(|bytes| String::from_utf8(bytes).ok());
-    compose(BASE, agents_md.as_deref())
+/// Garante o directório de sessões (só quando a sessão **persiste**).
+pub(crate) fn ensure_sessions(root: &Path) -> Result<(), String> {
+    ensure_dir(&root.join(".ktu").join("sessions"))
+}
+
+/// Cria um directório (e os pais), com erro legível.
+fn ensure_dir(dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dir)
+        .map_err(|error| format!("nao foi possivel criar {}: {error}", dir.display()))
+}
+
+/// Mensagem do arranque da fachada: o texto de `Invalid` já é legível e nomeia o ficheiro.
+fn build_message(error: Error) -> String {
+    match error {
+        Error::Invalid { message } => message,
+        other => other.to_string(),
+    }
+}
+
+/// Constrói o registo de agentes: default + declarativos do projecto (fail-closed).
+pub(crate) fn load_registry(fs: StdFs, root: &Path) -> Result<AgentRegistry, String> {
+    let registry = default_registry();
+    let files = agent_file::load(&fs, &root.join(AGENTS_FILES_DIR))
+        .map_err(|error| format!("agentes invalidos: {error}"))?;
+    let catalog = registry.primary().tool_names();
+    agent_file::apply(&files, registry, &catalog)
+        .map_err(|error| format!("agentes invalidos: {error}"))
 }
 
 /// Compõe as portas e corre **um** turno, escrevendo no `log`.
@@ -60,7 +80,8 @@ pub(crate) fn compose_system(fs: &dyn Fs, root: &Path) -> String {
 /// O `cancel` é partilhado com a borda (a UI cancela sem esperar pelo turno).
 ///
 /// # Errors
-/// Devolve mensagem legível se o provider ou a thread de tools não arrancarem.
+/// Devolve mensagem legível se o provider, a thread de tools ou a fachada não
+/// arrancarem (guardrails/permissões inválidos impedem o arranque — I16).
 #[allow(
     clippy::too_many_arguments,
     reason = "composicao explicita de DI; sem ramificacoes, um so caminho"
@@ -72,23 +93,38 @@ pub(crate) async fn execute_turn(
     config: &RunConfig,
     logger: &dyn Logger,
     cancel: &CancelToken,
+    steering: Option<&dyn Steering>,
 ) -> Result<StopReason, String> {
     let fs = StdFs;
     let clock = SystemClock::new();
-    let memory = JsonlMemory::new(&fs, &clock, root, root.join(".agents").join("memory"));
+    let memory_config = embeddings::load_config(&fs, root)?;
+    let embedder = embeddings::build(&memory_config.embeddings)
+        .map_err(|error| format!("memory.toml: {error}"))?;
+    let mut memory = JsonlMemory::new(&fs, &clock, root, root.join(".agents").join("memory"));
+    if let Some(embedder) = &embedder {
+        memory = memory.with_embeddings(embedder, memory_config.embeddings.clone());
+    }
     let provider = build_provider(config)?;
-    let registry = default_registry();
+    let registry = load_registry(fs, root)?;
     let plan_spec = plan_mode_spec();
     let plan_mode = log.mode() == Mode::Plan;
     let sessions_dir = root.join(".ktu").join("sessions");
+    let deferred = config.deferred_tools.clone();
     let tool_thread = ToolThread::spawn({
         let root = root.to_path_buf();
-        let session = config.session.clone();
+        let session = config.session.label().to_owned();
+        let memory_config = memory_config.clone();
         move |ctx| {
             let fs = StdFs;
             let clock = SystemClock::new();
-            let memory = JsonlMemory::new(&fs, &clock, &root, root.join(".agents").join("memory"));
-            let mut toolbox = Toolbox::new(&root, &fs, &clock, Some(&memory));
+            let embedder = embeddings::build(&memory_config.embeddings).ok().flatten();
+            let mut memory =
+                JsonlMemory::new(&fs, &clock, &root, root.join(".agents").join("memory"));
+            if let Some(embedder) = &embedder {
+                memory = memory.with_embeddings(embedder, memory_config.embeddings.clone());
+            }
+            let mut toolbox =
+                Toolbox::new(&root, &fs, &clock, Some(&memory)).with_deferred(deferred.clone());
             if plan_mode {
                 toolbox = toolbox.with_plan(FsPlanHost::new(
                     &fs,
@@ -100,19 +136,7 @@ pub(crate) async fn execute_turn(
         }
     })
     .map_err(|error| format!("nao foi possivel iniciar a thread de tools: {error}"))?;
-    let scoped = ScopedTools::new(&tool_thread, plan_spec.tool_names());
-    let tool_ref: &dyn ToolExecutor = if plan_mode { &scoped } else { &tool_thread };
-    let structural = if plan_mode {
-        StructuralGuard::for_spec(root, &plan_spec)
-    } else {
-        StructuralGuard::for_spec(root, registry.primary())
-    };
-    // Guardrails declarativos (I16): um ficheiro inválido impede o arranque.
-    let rules = guardrails::load(&fs, &root.join(".agents").join("guardrails"))
-        .map_err(|error| format!("guardrails invalidos: {error}"))?;
-    let declarative = DeclarativeGuard::new(rules);
-    let guard = ChainGuard::new(&structural, &declarative);
-    let budget = BudgetGate::new(CONTEXT_BUDGET_CHARS);
+    let budget = BudgetGate::new(Ktu::CONTEXT_BUDGET_TOKENS);
     let metrics = NoopMetrics;
     // Plugins externos (§2.9): um manifesto inválido desactiva o plugin, não a sessão.
     let plugins = PluginHost::load(root.join(".ktu").join("plugins"));
@@ -124,14 +148,12 @@ pub(crate) async fn execute_turn(
             fields: &[("erro", error.as_str())],
         });
     }
-    let system = compose_system(&fs, root);
-    let loop_config = LoopConfig {
-        max_steps: config.max_steps,
-        ..LoopConfig::default()
-    };
+    let user_dir = global_dir_path();
+    let system = system_prompt_in(&fs, root, user_dir.as_deref());
+    let instructions = LocalInstructions::new(root);
     let subagents = CliSubagents::new(
         provider.as_ref(),
-        tool_ref,
+        &tool_thread,
         &registry,
         root,
         &fs,
@@ -141,28 +163,41 @@ pub(crate) async fn execute_turn(
         &metrics,
         &clock,
         cancel,
-        system.clone(),
-        loop_config,
-        config.session.clone(),
+        system,
+        LoopConfig {
+            max_steps: config.max_steps,
+            ..LoopConfig::default()
+        },
+        config.session.label().to_owned(),
+        &instructions,
     );
-    let deps = Deps {
-        ports: Ports {
-            provider: provider.as_ref(),
-            tools: tool_ref,
-            guard: &guard,
-            budget: &budget,
-            cancel,
-        },
-        telemetry: Telemetry {
-            logger,
-            metrics: &metrics,
-            clock: &clock,
-        },
-        capabilities: Capabilities {
-            memory: Some(&memory),
-            subagents: Some(&subagents),
-            plugins: Some(&plugins),
-        },
-    };
-    Ok(run_turn(log, &deps, &system, prompt, &loop_config).await)
+    let mut builder = Ktu::builder()
+        .root(root)
+        .fs(&fs)
+        .clock(&clock)
+        .logger(logger)
+        .metrics(&metrics)
+        .provider(provider.as_ref())
+        .tools(&tool_thread)
+        .budget(&budget)
+        .cancel(cancel)
+        .registry(&registry)
+        .plan_spec(&plan_spec)
+        .memory(&memory)
+        .hooks(&plugins)
+        .subagents(&subagents)
+        .instructions(&instructions)
+        .max_steps(config.max_steps);
+    if let Some(dir) = user_dir.as_deref() {
+        builder = builder.user_dir(dir);
+    }
+    if let Some(steering) = steering {
+        builder = builder.steering(steering);
+    }
+    let ktu = builder.build().map_err(build_message)?;
+    let outcome = ktu
+        .turn(log, prompt)
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(outcome.reason)
 }

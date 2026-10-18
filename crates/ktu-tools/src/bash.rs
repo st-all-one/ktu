@@ -17,6 +17,8 @@ use serde_json::Value;
 use tokio::process::Command;
 use tokio::time::timeout;
 
+use crate::truncate;
+
 /// Limite por omissão da saída (bytes).
 const DEFAULT_MAX_OUTPUT: usize = 32_768;
 
@@ -122,13 +124,9 @@ impl BashTool {
             }
         };
         let status = output.status.code().unwrap_or(-1);
-        let stdout = cap(&output.stdout, self.max_output);
-        let stderr = cap(&output.stderr, self.max_output);
-        let body = format!(
-            "exit: {status}\nstdout:\n{stdout}\nstderr:\n{stderr}",
-            stdout = String::from_utf8_lossy(&stdout),
-            stderr = String::from_utf8_lossy(&stderr),
-        );
+        let stdout = spill_stream(&self.root, "stdout", &output.stdout, self.max_output);
+        let stderr = spill_stream(&self.root, "stderr", &output.stderr, self.max_output);
+        let body = format!("exit: {status}\nstdout:\n{stdout}\nstderr:\n{stderr}");
         let result = ToolOutcome::ok(wrap_untrusted("bash", &body));
         if status == 0 {
             result
@@ -243,9 +241,23 @@ fn tokens(script: &str) -> Vec<&str> {
         .collect()
 }
 
-fn cap(bytes: &[u8], limit: usize) -> Vec<u8> {
-    let length = limit.min(bytes.len());
-    bytes.get(..length).unwrap_or(&[]).to_vec()
+/// Trunca uma *stream* (linhas + bytes) e, se cortada, guarda o completo em
+/// `.ktu/out/` com um ponteiro legível para o modelo.
+fn spill_stream(root: &Path, label: &str, bytes: &[u8], max_bytes: usize) -> String {
+    let text = String::from_utf8_lossy(bytes).into_owned();
+    let capped = truncate::truncate(&text, truncate::MAX_LINES, max_bytes);
+    if !capped.is_cut {
+        return capped.text;
+    }
+    let shown = capped.text.lines().count();
+    let total = capped.total_lines;
+    match truncate::spill(root, label, &text) {
+        Some(path) => format!(
+            "{}\n[truncado: {shown} de {total} linhas; completo em {path}]",
+            capped.text
+        ),
+        None => format!("{}\n[truncado: {shown} de {total} linhas]", capped.text),
+    }
 }
 
 #[cfg(test)]

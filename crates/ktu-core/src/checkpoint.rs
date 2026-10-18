@@ -21,6 +21,9 @@ pub struct Checkpoint {
     pub compacted: bool,
     /// Índice do corte de compactação, quando aplicado.
     pub keep_from: Option<u32>,
+    /// Título curto derivado do primeiro pedido (`None` enquanto não houver pedido).
+    #[serde(default)]
+    pub title: Option<String>,
     /// Instante da última actualização (ms desde a época).
     pub updated_ms: i64,
 }
@@ -76,6 +79,7 @@ mod tests {
             turns: 3,
             compacted: true,
             keep_from: Some(6),
+            title: Some("arranja o parser".to_owned()),
             updated_ms: 1_700_000_000_000,
         }
     }

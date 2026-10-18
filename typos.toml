@@ -10,6 +10,10 @@ extend-exclude = ["REF/", "crates/knudge/", "wiki/", ".knudge/", ".agents/", "mo
 
 [default.extend-words]
     "Argumentos" = "Argumentos"
+    "Adquire" = "Adquire"
+    "Alternar" = "Alternar"
+    "aprove" = "aprove"
+    "repete" = "repete"
     "Cliente" = "Cliente"
     "Comando" = "Comando"
     "Comandos" = "Comandos"
@@ -77,7 +81,9 @@ extend-exclude = ["REF/", "crates/knudge/", "wiki/", ".knudge/", ".agents/", "mo
     "mede" = "mede"
     "momento" = "momento"
     "nomes" = "nomes"
+    "oficial" = "oficial"
     "persistente" = "persistente"
+    "posicional" = "posicional"
     "potencial" = "potencial"
     "prefere" = "prefere"
     "problemas" = "problemas"

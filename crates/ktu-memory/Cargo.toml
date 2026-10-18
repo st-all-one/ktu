@@ -15,6 +15,8 @@ ktu-core.workspace = true
 # Motor de recuperação adoptado (§2.7): schema (id/hash), codec JSON canónico,
 # índice BM25 + RRF e dedup — consumido em memória, nunca acoplado ao kernel.
 knudge-core = { path = "../../crates/knudge/crates/knudge-core" }
+# Argumentos de tool são JSON emitido pelo modelo: parse exato (âncoras da projecção).
+serde_json.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

@@ -1,6 +1,6 @@
 # Tool calls declaradas como texto
 
-- **Estado:** candidata (do `katu`, W8-1b) — **incorporar**.
+- **Estado:** **implementado** (H5; `wiki/implementation_phase2/H5-fiabilidade-loop.md`).
 - **Origem:** `REF/katu/wiki/crates/DOSSIE_PENDENCIAS.md` §4; `wiki/revisao-katu.md` §3.4.
 - **Âncora:** `crates/ktu-core/src/agent/mod.rs`, `crates/ktu-provider/src/wire.rs`.
 

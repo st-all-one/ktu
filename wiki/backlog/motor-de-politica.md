@@ -1,6 +1,6 @@
 # Motor de política completo (política como **dado**)
 
-- **Estado:** deferido (o *seam* existe; o motor não).
+- **Estado:** **implementado** (H6, *seam*) — `Guard::evaluate`/`remedy` sobre `Fact`; guardrails com `deny|escalate` + `remedy`. O motor genérico (regras por combinação de factos) continua deferido.
 - **Origem:** katu `wiki/_ref/plan/03-contrato-de-politica.md`, `policy/containment.toml`;
   `plan.md` §2.8/§2.12-B.
 - **Âncora:** `crates/ktu-core/src/guard.rs`, `.agents/guardrails/*.md`.

@@ -3,9 +3,11 @@
 //! O domínio é **puro**: nunca lê o relógio global, o ambiente, o sistema de
 //! ficheiros, o gerador aleatório nem o `tracing`. Esses efeitos entram por
 //! **portas** (traits) injectadas; a borda fornece adaptadores reais e os
-//! testes fornecem *fakes* determinísticos (ver [`fakes`]).
+//! testes fornecem *fakes* determinísticos ([`FixedClock`], [`MemFs`], [`FakeEmbedder`], …).
 
+mod embedder;
 mod fakes;
+mod instructions;
 mod logger;
 mod metrics;
 
@@ -16,10 +18,12 @@ use std::path::Path;
 
 use crate::Result;
 
+pub use embedder::{EmbedError, Embedder, EmbeddingMeta};
 pub use fakes::{
-    FixedClock, MapEnv, MemFs, NoopLogger, NoopMetrics, OwnedRecord, RecordingLogger,
-    RecordingMetrics, SeqClock, SeqRng,
+    FakeEmbedder, FixedClock, MapEnv, MapInstructions, MemFs, NoopLogger, NoopMetrics, OwnedRecord,
+    RecordingLogger, RecordingMetrics, SeqClock, SeqRng, UnavailableEmbedder,
 };
+pub use instructions::{Instructions, Local};
 pub use logger::{Level, LogRecord, Logger};
 pub use metrics::{Metric, Metrics, MetricsSnapshot};
 

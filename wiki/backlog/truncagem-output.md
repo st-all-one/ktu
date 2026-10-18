@@ -1,6 +1,6 @@
 # Truncagem sistemática de output (linhas + bytes)
 
-- **Estado:** candidata (do `pi`) — **incorporar** (consolida com [81](./resposta-grande-ficheiro.md)).
+- **Estado:** **implementado** (H5; `wiki/implementation_phase2/H5-fiabilidade-loop.md`).
 - **Origem:** `REF/pi/packages/coding-agent/src/core/tools/{truncate,output-accumulator}.ts`;
   `wiki/revisao-pi-profunda.md` §1.2.
 - **Âncora:** `crates/ktu-tools/src/fs_tools.rs`, `crates/ktu-tools/src/bash.rs`.

@@ -1,0 +1,14 @@
+{"event":"plugin_dispatch","hook":"session.start","generation":1,"allowed":true,"reason":null}
+{"event":"plugin_dispatch","hook":"user.input","generation":1,"allowed":true,"reason":null}
+{"event":"turn_start","prompt":"le segredos.env"}
+{"event":"plugin_dispatch","hook":"model.request","generation":1,"allowed":true,"reason":null}
+{"event":"plugin_dispatch","hook":"model.output","generation":1,"allowed":true,"reason":null}
+{"event":"assistant","content":"","reasoning":"","tool_calls":[{"id":"c1","name":"read_file","arguments":"{\"path\":\"segredos.env\"}"}]}
+{"event":"guard_decision","tool":"read_file","allowed":false,"reason":"deny:guardrail"}
+{"event":"plugin_dispatch","hook":"guard.decision","generation":1,"allowed":true,"reason":null}
+{"event":"tool_result","tool_call_id":"c1","name":"read_file","content":"negado: guardrail — respeite o guardrail (veja .agents/guardrails)","is_error":true}
+{"event":"plugin_dispatch","hook":"model.request","generation":1,"allowed":true,"reason":null}
+{"event":"plugin_dispatch","hook":"model.output","generation":1,"allowed":true,"reason":null}
+{"event":"assistant","content":"fim","reasoning":"","tool_calls":[]}
+{"event":"turn_end","reason":"max_steps"}
+{"event":"plugin_dispatch","hook":"session.end","generation":1,"allowed":true,"reason":null}

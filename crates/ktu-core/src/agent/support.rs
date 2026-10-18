@@ -134,9 +134,75 @@ pub(super) fn reason_str(reason: StopReason) -> &'static str {
         StopReason::EndTurn => "end_turn",
         StopReason::MaxSteps => "max_steps",
         StopReason::Stalled => "stalled",
+        StopReason::Echo => "echo",
         StopReason::Cancelled => "cancelled",
         StopReason::Error => "error",
     }
+}
+
+/// Janela de eventos recentes comparados na detecção de eco.
+const ECHO_WINDOW: usize = 6;
+
+/// Comprimento mínimo (bytes) para considerar um prefixo comum como eco.
+const ECHO_MIN_CHARS: usize = 40;
+
+/// `true` se `text` é eco do prompt do turno ou de um texto recente (G5).
+///
+/// Compara com o *trim* e o colapso de espaços; igualdade ou prefixo longo
+/// (≥ [`ECHO_MIN_CHARS`]) conta como eco. Uma resposta legítima (conteúdo novo)
+/// não é marcada (controlo negativo no teste).
+pub(super) fn is_echo(text: &str, log: &SessionLog) -> bool {
+    let answer = normalize(text);
+    if answer.is_empty() {
+        return false;
+    }
+    recent_texts(log)
+        .iter()
+        .any(|candidate| echo_of(&answer, &normalize(candidate)))
+}
+
+/// Textos recentes com que comparar (prompt do turno + últimos resultados).
+fn recent_texts(log: &SessionLog) -> Vec<&str> {
+    let events = log.events();
+    let mut out = Vec::new();
+    if let Some(Event::TurnStart { prompt }) = events
+        .iter()
+        .rev()
+        .find(|event| matches!(event, Event::TurnStart { .. }))
+    {
+        out.push(prompt.as_str());
+    }
+    for event in events.iter().rev().take(ECHO_WINDOW) {
+        match event {
+            Event::Assistant { content, .. } if !content.trim().is_empty() => {
+                out.push(content.as_str());
+            }
+            Event::ToolResult { content, .. } => out.push(content.as_str()),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Normaliza para comparação: *trim* + colapso de espaços.
+fn normalize(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// `true` se `answer` é igual a `candidate` ou um prefixo longo (nos dois sentidos).
+fn echo_of(answer: &str, candidate: &str) -> bool {
+    if candidate.is_empty() {
+        return false;
+    }
+    if answer == candidate {
+        return true;
+    }
+    let (long, short) = if answer.len() >= candidate.len() {
+        (answer, candidate)
+    } else {
+        (candidate, answer)
+    };
+    short.len() >= ECHO_MIN_CHARS && long.starts_with(short)
 }
 
 /// Máximo de ponteiros de memória recordados no arranque de sessão.

@@ -1,6 +1,7 @@
 # Nome automático de sessão
 
-- **Estado:** candidata (do `goose`) — **incorporar**.
+- **Estado:** **incorporada** (H10) — título heurístico determinístico (≤ 8 palavras), guardado no
+  *checkpoint* e mostrado por `ktu session ls`; *fallback* ao `id`.
 - **Origem:** `REF/goose/crates/goose/src/session/session_naming.rs`;
   `wiki/revisao-goose-profunda.md` §1.6.
 - **Âncora:** `crates/ktu-cli/src/session_store.rs`.

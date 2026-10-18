@@ -106,6 +106,15 @@ impl Port for HttpPort {
         .await
     }
 
+    async fn steer(&self, session_id: &str, text: &str) -> Result<(), PortError> {
+        self.discard(
+            self.client
+                .post(self.url(&format!("/v1/session/{session_id}/steer")))
+                .json(&json!({ "text": text })),
+        )
+        .await
+    }
+
     async fn set_mode(
         &self,
         session_id: &str,

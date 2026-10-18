@@ -10,10 +10,13 @@ use ktu_core::ports::Fs;
 use ktu_core::taint::wrap_untrusted;
 use ktu_core::tools::{ToolExecutor, ToolOutcome};
 use serde_json::Value;
+use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use crate::path::{resolve_existing, resolve_for_write};
 use crate::search;
+use crate::text::{Document, Edit, apply_edits, to_lf};
+use crate::truncate;
 
 /// Limite por omissão do conteúdo lido (bytes).
 const DEFAULT_MAX_BYTES: usize = 65_536;
@@ -40,22 +43,39 @@ impl<'a> FsTools<'a> {
         let Some(requested) = args.get("path").and_then(Value::as_str) else {
             return ToolOutcome::error("argumento 'path' em falta");
         };
+        let offset = args.get("offset").and_then(Value::as_u64).unwrap_or(1);
         let path = match resolve_existing(self.fs, &self.root, requested) {
             Ok(path) => path,
+            Err(message) if message.starts_with("caminho inexistente") => {
+                return ToolOutcome::error(format!("read.missing: {requested}"));
+            }
             Err(message) => return ToolOutcome::error(message),
         };
-        match self.fs.read(&path) {
-            Ok(bytes) => {
-                let limit = self.max_bytes.min(bytes.len());
-                let slice = bytes.get(..limit).unwrap_or(&[]);
-                let mut text = String::from_utf8_lossy(slice).into_owned();
-                if bytes.len() > self.max_bytes {
-                    text.push_str("\n... [conteudo truncado]");
-                }
-                ToolOutcome::ok(wrap_untrusted("read_file", &text))
-            }
-            Err(error) => ToolOutcome::error(format!("nao foi possivel ler {requested}: {error}")),
+        let Ok(bytes) = self.fs.read(&path) else {
+            return ToolOutcome::error(format!("read.missing: {requested}"));
+        };
+        let document = Document::parse(&bytes);
+        let text = document.body();
+        let lines: Vec<&str> = text.lines().collect();
+        let start = usize::try_from(offset.saturating_sub(1)).unwrap_or(0);
+        let Some(from) = lines.get(start..) else {
+            return ToolOutcome::error(format!(
+                "read.missing: offset {offset} alem do fim ({} linhas)",
+                lines.len()
+            ));
+        };
+        let window = from.join("\n");
+        let capped = truncate::truncate(&window, truncate::MAX_LINES, self.max_bytes);
+        let mut body = capped.text;
+        if capped.is_cut {
+            let next = start.saturating_add(body.lines().count());
+            let _ignored = write!(
+                body,
+                "\n[truncado: continua com read_file path={requested} offset={}]",
+                next.saturating_add(1)
+            );
         }
+        ToolOutcome::ok(wrap_untrusted("read_file", &body))
     }
 
     fn write(&self, args: &Value) -> ToolOutcome {
@@ -77,33 +97,30 @@ impl<'a> FsTools<'a> {
     }
 
     fn edit(&self, args: &Value) -> ToolOutcome {
-        let requested = args.get("path").and_then(Value::as_str);
-        let old = args.get("old").and_then(Value::as_str);
-        let new = args.get("new").and_then(Value::as_str);
-        let (Some(requested), Some(old), Some(new)) = (requested, old, new) else {
-            return ToolOutcome::error("argumentos 'path', 'old' e 'new' sao obrigatorios");
+        let Some(requested) = args.get("path").and_then(Value::as_str) else {
+            return ToolOutcome::error("argumento 'path' em falta");
+        };
+        let edits = match parse_edits(args) {
+            Ok(edits) => edits,
+            Err(message) => return ToolOutcome::error(message),
         };
         let path = match resolve_existing(self.fs, &self.root, requested) {
             Ok(path) => path,
             Err(message) => return ToolOutcome::error(message),
         };
         let Ok(bytes) = self.fs.read(&path) else {
-            return ToolOutcome::error(format!("nao foi possivel ler {requested}"));
+            return ToolOutcome::error(format!("read.missing: {requested}"));
         };
-        let content = String::from_utf8_lossy(&bytes).into_owned();
-        match content.matches(old).count() {
-            0 => ToolOutcome::error(format!("texto nao encontrado em {requested}")),
-            1 => {
-                let updated = content.replacen(old, new, 1);
-                match self.fs.write(&path, updated.as_bytes()) {
-                    Ok(()) => ToolOutcome::ok(format!("editado {requested}")),
-                    Err(error) => ToolOutcome::error(format!(
-                        "nao foi possivel escrever {requested}: {error}"
-                    )),
-                }
-            }
-            count => {
-                ToolOutcome::error(format!("texto ambiguo em {requested}: {count} ocorrencias"))
+        let document = Document::parse(&bytes);
+        let updated = match apply_edits(document.body(), &edits) {
+            Ok(updated) => updated,
+            Err(message) => return ToolOutcome::error(format!("{message} em {requested}")),
+        };
+        let rendered = document.render(&updated);
+        match self.fs.write(&path, &rendered) {
+            Ok(()) => ToolOutcome::ok(format!("editado {requested} ({} bloco(s))", edits.len())),
+            Err(error) => {
+                ToolOutcome::error(format!("nao foi possivel escrever {requested}: {error}"))
             }
         }
     }
@@ -172,14 +189,50 @@ fn spec(name: &str, description: &str, parameters: &str) -> ToolSpec {
     }
 }
 
+/// Lê as edições do pedido: `edits` (array) ou o par `old`/`new` (uma edição).
+fn parse_edits(args: &Value) -> Result<Vec<Edit>, String> {
+    if let Some(items) = args.get("edits").and_then(Value::as_array) {
+        if items.is_empty() {
+            return Err("lista 'edits' vazia".to_owned());
+        }
+        return items
+            .iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let old = item.get("old").and_then(Value::as_str);
+                let new = item.get("new").and_then(Value::as_str);
+                match (old, new) {
+                    (Some(old), Some(new)) => Ok(Edit {
+                        old: to_lf(old),
+                        new: to_lf(new),
+                    }),
+                    _ => Err(format!(
+                        "bloco {}: 'old' e 'new' sao obrigatorios",
+                        index.saturating_add(1)
+                    )),
+                }
+            })
+            .collect();
+    }
+    let old = args.get("old").and_then(Value::as_str);
+    let new = args.get("new").and_then(Value::as_str);
+    match (old, new) {
+        (Some(old), Some(new)) => Ok(vec![Edit {
+            old: to_lf(old),
+            new: to_lf(new),
+        }]),
+        _ => Err("argumentos 'old' e 'new' (ou 'edits') sao obrigatorios".to_owned()),
+    }
+}
+
 #[async_trait]
 impl ToolExecutor for FsTools<'_> {
     fn specs(&self) -> Vec<ToolSpec> {
         vec![
             spec(
                 "read_file",
-                "Le um ficheiro de texto dentro do projecto.",
-                r#"{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}"#,
+                "Le um ficheiro de texto dentro do projecto (offset = linha inicial, 1-based).",
+                r#"{"type":"object","properties":{"path":{"type":"string"},"offset":{"type":"integer"}},"required":["path"]}"#,
             ),
             spec(
                 "write_file",
@@ -188,8 +241,8 @@ impl ToolExecutor for FsTools<'_> {
             ),
             spec(
                 "edit_file",
-                "Substitui a unica ocorrencia de um texto num ficheiro existente.",
-                r#"{"type":"object","properties":{"path":{"type":"string"},"old":{"type":"string"},"new":{"type":"string"}},"required":["path","old","new"]}"#,
+                "Aplica uma ou mais substituicoes (ancoras unicas) a um ficheiro, atomicamente.",
+                r#"{"type":"object","properties":{"path":{"type":"string"},"edits":{"type":"array","items":{"type":"object","properties":{"old":{"type":"string"},"new":{"type":"string"}},"required":["old","new"]}},"old":{"type":"string"},"new":{"type":"string"}},"required":["path"]}"#,
             ),
             spec(
                 "list_dir",

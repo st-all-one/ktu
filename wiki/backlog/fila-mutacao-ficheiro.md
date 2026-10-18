@@ -1,6 +1,6 @@
 # Fila de mutação de ficheiro
 
-- **Estado:** candidata (do `pi`) — **incorporar**.
+- **Estado:** **adiado** (A6, `task_01qsu6vf`) — as tools correm sequencialmente na T2; sem escrita concorrente ao mesmo ficheiro.
 - **Origem:** `REF/pi/packages/coding-agent/src/core/tools/file-mutation-queue.ts`;
   `wiki/revisao-pi-profunda.md` §1.3.
 - **Âncora:** `crates/ktu-tools/src/fs_tools.rs`.

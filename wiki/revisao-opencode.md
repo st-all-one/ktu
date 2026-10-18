@@ -97,7 +97,7 @@ sem o modelo gastar passos. É **efeito**, logo atrás de uma porta/tool.
 `PermissionSaved` (uma aprovação **memorizada** por `action`/`resource`/projecto).
 
 **Porque interessa:** o ktu tem guardrails declarativos (fail-closed) e `Approval`, mas
-**não** memoriza aprovações. É a mesma ideia da página [permission-store](./permission-store.md)
+**não** memoriza aprovações. É a mesma ideia da página [permission-store](./backlog/permission-store.md)
 (goose), agora com um schema concreto (`action`/`resource`/`effect` + `save`).
 
 **Decisão:** consolidar em **uma** página (permission-store), referenciando o schema do
@@ -126,7 +126,7 @@ referência) é simples e útil — dados, não efeito.
 ### 2.8 Codemode · **AVALIAR (já há página)**
 
 **O que é:** o opencode tem `packages/codemode` (10 k) — a mesma ideia do pi: código que
-chama tools, com só a saída a chegar ao modelo. **Página já existe:** [codemode](./codemode.md).
+chama tools, com só a saída a chegar ao modelo. **Página já existe:** [codemode](./backlog/codemode.md).
 Acrescentar que **dois** referenciais independentes o implementam (sinal de valor).
 
 ### 2.9 Simulation (testes determinísticos) · **AVALIAR**

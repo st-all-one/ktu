@@ -1,0 +1,10 @@
+---
+id: fact_008mf7z7
+type: fact
+statement: Estudo kd ai: viavel para memory (fonte JSONL read-only) e session-log so por projecao; ganho e de ecossistema
+created_at: 2026-10-17T22:45:14.535Z
+body_hash: 9dec2b46
+schema_version: 2
+anchors: [wiki/estudo-kd-ai.md]
+---
+Estudo (wiki/estudo-kd-ai.md) da tangente kd ai [memory|session-log] [--add|--init|--anchor|--force] no knudge (core+cli), default consulta. Factos medidos: o knudge Store le notas/<tipo>/<id>.md (frontmatter TOON + corpo), nao JSONL; o corpus le notas/ uma vez -> Index+Graph; eventos/events*.jsonl e auditoria de escrita (op,note_id,at,data), nao conversa; KnudgeBuilder tem knowledge_dir configuravel. O ktu: .agents/memory/notes.jsonl e JSONL {frontmatter,body} COM OS TIPOS DO KNUDGE (Note/Frontmatter/Value) via ktu-memory/record.rs; .ktu/sessions/<id>.jsonl e Event (event: turn_start|assistant|tool_result|guard_decision|turn_end|mode_set|plugin_dispatch), fonte da verdade I3. Pergunta 1 (viavel?): memory SIM (baixo esforco, aditivo, reusa o schema; falta um Source JSONL read-only no knudge); session-log SIM mas SO como projecao read-only pelo agente (nunca dominio novo: acoplaria o knudge ao schema Event e viraria store de logs); kd ai SIM como area fina sobre o Source. Pergunta 2 (ganhos?): para o ktu sozinho MODERADO (o ktu-memory ja usa o motor do knudge em memoria; a pesquisa do log pode ficar no ktu); para o ecossistema ALTO (o knudge vira eixo unico de memoria+logs para varios agentes). Riscos: dupla fonte da verdade (o log fica no agente; o knudge so le), acoplamento (contrato e o documento {frontmatter,body}, nao o evento), scope creep. Recomendacao: (1) Source JSONL read-only no knudge-core (o caso JSONL; ganho estrutural: elimina a reimplementacao da leitura no ktu-memory); (2) kd ai como area fina sobre o Source; (3) session-log so por projecao do agente; (4) nao acoplar ao schema Event; (5) YAGNI condicional: so com >=2 agentes consumidores. Pagina backlog: wiki/backlog/kd-ai.md (124).

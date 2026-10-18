@@ -6,15 +6,19 @@
 //! `clippy.toml`).
 
 mod clock;
+mod embedder;
 mod env;
 mod fs;
+mod instructions;
 mod logger;
 mod metrics;
 mod rng;
 
 pub use clock::{FixedClock, SeqClock};
+pub use embedder::{FakeEmbedder, UnavailableEmbedder};
 pub use env::MapEnv;
 pub use fs::MemFs;
+pub use instructions::MapInstructions;
 pub use logger::{NoopLogger, OwnedRecord, RecordingLogger};
 pub use metrics::{NoopMetrics, RecordingMetrics};
 pub use rng::SeqRng;

@@ -1,0 +1,261 @@
+{
+  "gates": [
+    {
+      "checks": [
+        {
+          "detail": "exit=exit status: 0 {\"timestamp\":\"2026-10-18T11:35:35.317988Z\",\"level\":\"INFO\",\"fields\":{\"event\":\"plugin.dispatch\",\"message\":\"hook despachado\",\"fields\":\"[(\\\"event\\\", \\\"session.end\\\"), (\\\"generation\\\", \\\"1\\\"), (\\\"allowed\\\", \\\"true\\\"), (\\\"reason\\\", \\\"\\\")]\"},\"target\":\"ktu::logging\"}",
+          "name": "a cadeia corre de ponta a ponta",
+          "ok": true
+        },
+        {
+          "detail": "turnos=15 (lote=15)",
+          "name": ">=15 turnos na mesma sessao",
+          "ok": true
+        },
+        {
+          "detail": "turn_end=15 end_turn=15 (sem estagnacao nem erro)",
+          "name": "todos os turnos fecham com StopReason normal (I1/I5)",
+          "ok": true
+        },
+        {
+          "detail": "compactacoes=0",
+          "name": "o log nao tem compactacao (a instrucao inicial fica no contexto, I14)",
+          "ok": true
+        },
+        {
+          "detail": "exit=exit status: 0 ",
+          "name": "o artefacto esta correto (`cargo test` verde no repo alvo)",
+          "ok": true
+        },
+        {
+          "detail": "src/lib.rs contem `a + b` e `pub mod media;`",
+          "name": "a soma foi corrigida e o modulo media ligado",
+          "ok": true
+        },
+        {
+          "detail": "bytes=489",
+          "name": "o modulo novo tem teste",
+          "ok": true
+        }
+      ],
+      "id": "G10",
+      "notes": [
+        "Leituras por ficheiro (nao-estagnacao): Cargo.toml=2 README.md=2 src/lib.rs=5 src/media.rs=2",
+        "O guiao e deterministico (provider `scripted`): o mesmo gate, duas vezes, da o mesmo log — I6. O modelo real (Ornith 9B) nao e corrido aqui: neste host CPU-only mediu ~8 min por completion (ver o relatorio)."
+      ],
+      "ok": true,
+      "title": "Cadeia longa numa sessao (>=15 turnos, artefacto correto)"
+    },
+    {
+      "checks": [
+        {
+          "detail": "exit=exit status: 0 tool_result=1",
+          "name": "uma tool call declarada em texto e executada",
+          "ok": true
+        },
+        {
+          "detail": "end_turn=1",
+          "name": "o turno fecha com StopReason normal",
+          "ok": true
+        }
+      ],
+      "id": "G11",
+      "notes": [
+        "Observacao com o modelo real (qwen2.5-coder-1.5b em http://127.0.0.1:8080): exit=exit status: 0, turnos fechados=0, resposta final=\"\""
+      ],
+      "ok": true,
+      "title": "Robustez multi-modelo: tool call em texto e reparacao"
+    },
+    {
+      "checks": [
+        {
+          "detail": "run=exit status: 0 repl=exit status: 0 crate=exit status: 0",
+          "name": "os tres caminhos terminam com sucesso",
+          "ok": true
+        },
+        {
+          "detail": "fnv64: run=c21e1ff7afb821f3 repl=c21e1ff7afb821f3 crate=c21e1ff7afb821f3",
+          "name": "derive_messages(log) byte-identico nos tres caminhos",
+          "ok": true
+        },
+        {
+          "detail": "turn_end por log: [1, 1, 1]",
+          "name": "cada caminho fecha o turno com StopReason normal (I5)",
+          "ok": true
+        },
+        {
+          "detail": "fnv64: run=c21e1ff7afb821f3 repetido=c21e1ff7afb821f3",
+          "name": "determinismo: o mesmo caminho duas vezes da o mesmo log (I6)",
+          "ok": true
+        }
+      ],
+      "id": "G12",
+      "notes": [
+        "O caminho 'crate' e o exemplo `ktu-embed` (fachada); usa o mesmo provider de demonstracao e o mesmo host de plugins do CLI, o que torna o log literalmente identico."
+      ],
+      "ok": true,
+      "title": "Independencia do caminho (M4): run, REPL e crate"
+    },
+    {
+      "checks": [
+        {
+          "detail": "exit status: 0",
+          "name": "batch paralelo termina com sucesso",
+          "ok": true
+        },
+        {
+          "detail": "[0 [1 [2 [3",
+          "name": "stdout ordenado pelo indice de entrada",
+          "ok": true
+        },
+        {
+          "detail": "turnos por log: [1, 1, 1, 1]",
+          "name": "cada item corre na sua sessao (sem corrupcao)",
+          "ok": true
+        },
+        {
+          "detail": "ok · ok · ok · ok",
+          "name": "I1/I2 limpos em todos os logs",
+          "ok": true
+        },
+        {
+          "detail": "exit=exit status: 1 stderr=ktu: sessao ocupada ocupada por outro processo",
+          "name": "lock vivo recusa o segundo processo com razao clara",
+          "ok": true
+        },
+        {
+          "detail": "exit status: 0",
+          "name": "lock largado deixa o turno correr",
+          "ok": true
+        }
+      ],
+      "id": "G13",
+      "notes": [
+        "O lock e por id de sessao (`.ktu/sessions/<id>.lock`), com `create_new` e expiracao a 30 s; nunca apagamos um lock alheio."
+      ],
+      "ok": true,
+      "title": "Pipeline concorrente: paralelo ordenado, lock e integridade"
+    },
+    {
+      "checks": [
+        {
+          "detail": "exit status: 0",
+          "name": "git init disponivel (o cenário exige um repositorio)",
+          "ok": true
+        },
+        {
+          "detail": "exit status: 0",
+          "name": "ktu init corre",
+          "ok": true
+        },
+        {
+          "detail": "antes=[\"b0edfb966c380cc1\", \"c29febe2fc53206b\", \"6d1d73d0e0c8364c\"] depois=[\"b0edfb966c380cc1\", \"c29febe2fc53206b\", \"6d1d73d0e0c8364c\"]",
+          "name": "ktu init e idempotente (ficheiros geridos inalterados)",
+          "ok": true
+        },
+        {
+          "detail": "attributes=1 exclude /.ktu/=1",
+          "name": "marcadores sem duplicacao (bloco unico)",
+          "ok": true
+        },
+        {
+          "detail": "/.ktu/",
+          "name": "por omissao o conhecimento versiona-se (so o derivado e excluido)",
+          "ok": true
+        },
+        {
+          "detail": "contem /.agents/: true",
+          "name": "--git-excluded exclui todo o .agents/",
+          "ok": true
+        },
+        {
+          "detail": "exclude reposto ao estado inicial",
+          "name": "--git-tracked reverte ao estado inicial",
+          "ok": true
+        },
+        {
+          "detail": "local",
+          "name": "local ganha ao global (M6)",
+          "ok": true
+        },
+        {
+          "detail": "exit status: 0",
+          "name": "flag ganha a config (provider mock corre sem modelo)",
+          "ok": true
+        },
+        {
+          "detail": "exit status: 0",
+          "name": "params ganham a config",
+          "ok": true
+        },
+        {
+          "detail": "contem segredo: false",
+          "name": "M3: a chave de auth nao ecoa (redigida)",
+          "ok": true
+        },
+        {
+          "detail": "exit=exit status: 0 allowed=false: true ({\"timestamp\":\"2026-10-18T11:35:51.068196Z\",\"level\":\"INFO\",\"fields\":{\"event\":\"plugin.dispatch\",\"message\":\"hook despachado\",\"fields\":\"[(\\\"event\\\", \\\"session.end\\\"), (\\\"generation\\\", \\\"1\\\"), (\\\"allowed\\\", \\\"true\\\"), (\\\"reason\\\", \\\"\\\")]\"},\"target\":\"ktu::logging\"})",
+          "name": "M5: guardrail global nao e desligavel pelo projecto",
+          "ok": true
+        }
+      ],
+      "id": "G14",
+      "notes": [],
+      "ok": true,
+      "title": "Project-bound: init idempotente, git, precedencia, M3/M5"
+    },
+    {
+      "checks": [
+        {
+          "detail": "exit=exit status: 0 memory.write=true",
+          "name": "sessao 1 grava memoria no fim do turno",
+          "ok": true
+        },
+        {
+          "detail": "linhas=1",
+          "name": "notes.jsonl tem a nota com proveniencia do agente",
+          "ok": true
+        },
+        {
+          "detail": "linhas=4",
+          "name": "ktu memory list mostra a nota",
+          "ok": true
+        },
+        {
+          "detail": "exit=exit status: 0 memory.recall=true",
+          "name": "sessao nova recupera a memoria (memory.recall)",
+          "ok": true
+        },
+        {
+          "detail": "bytes antes=314 depois=314",
+          "name": "apagar o indice derivado nao perde nada (recall identico)",
+          "ok": true
+        },
+        {
+          "detail": "linhas=2",
+          "name": "a projecao do log escreve notas derivadas com proveniencia",
+          "ok": true
+        },
+        {
+          "detail": "notes.jsonl inalterado",
+          "name": "a projecao nao altera o registo (fonte read-only)",
+          "ok": true
+        },
+        {
+          "detail": "exit=exit status: 0 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+          "name": "knudge: `ask --agent` filtra por proveniencia (fonte JSONL)",
+          "ok": true
+        },
+        {
+          "detail": "exit=exit status: 0 test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 690 filtered out; finished in 0.09s",
+          "name": "knudge: a fonte JSONL e read-only, deduplica e tolera linhas mas",
+          "ok": true
+        }
+      ],
+      "id": "G15",
+      "notes": [],
+      "ok": true,
+      "title": "Eixo de memoria: escreve, recupera noutra sessao, derivado"
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 # Método de medição (medir → A/B → adotar-ou-reverter)
 
-- **Estado:** candidata (do `katu`) — **incorporar**.
+- **Estado:** **incorporada** (H11) — `wiki/metodo-medicao.md` (fórmula + artefacto + teste que
+  trava; A/B; adoptar-ou-reverter ≥ 20 % ou simplificação) + `basis` por amostra no
+  `wiki/benchmarks/ktu-bench.json` (schema 2) + regra no `plan.md` §4.1.
 - **Origem:** `REF/katu/wiki/_ref/plan/OPTIMIZATION_PLAN.md` §0, `bench/published.toml`;
   `wiki/revisao-katu.md` §1.3.
 - **Âncora:** `wiki/benchmarks/`, `plan.md` §0, `crates/ktu-core/benches/core.rs`.

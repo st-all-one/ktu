@@ -3,15 +3,15 @@
 use async_trait::async_trait;
 use std::sync::{Mutex, PoisonError};
 
-use ktu_core::agent::{Capabilities, Deps, LoopConfig, Ports, Telemetry, run_turn};
+use ktu_core::agent::{Capabilities, Deps, LoopConfig, Ports, Steering, Telemetry, run_turn};
 use ktu_core::budget::BudgetGate;
 use ktu_core::cancel::CancelToken;
-use ktu_core::domain::{Completion, StopReason, ToolCall, ToolCallId, ToolSpec};
+use ktu_core::domain::{Completion, Message, StopReason, ToolCall, ToolCallId, ToolSpec};
 use ktu_core::events;
 use ktu_core::guard::StructuralGuard;
 use ktu_core::memory::{Hint, Memory, MemoryDraft, MemoryResult, MemoryWrite};
 use ktu_core::plugin::{HookPayload, HookVerdict, Hooks, NoHooks};
-use ktu_core::ports::{FixedClock, NoopMetrics, RecordingLogger, Timestamp};
+use ktu_core::ports::{FixedClock, MapInstructions, NoopMetrics, RecordingLogger, Timestamp};
 use ktu_core::session::{Event, SessionLog};
 use ktu_core::subagent::{SubagentHost, SubagentReport, SubagentRequest};
 use ktu_core::testing::{FakeProvider, FakeTools};
@@ -85,6 +85,8 @@ async fn loop_runs_a_tool_then_finishes() {
             memory: None,
             subagents: None,
             plugins: None,
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -135,6 +137,8 @@ async fn guard_denies_a_tool_outside_the_spec() {
             memory: None,
             subagents: None,
             plugins: None,
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -196,6 +200,8 @@ async fn cancel_before_the_first_step_closes_the_turn() {
             memory: None,
             subagents: None,
             plugins: None,
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -245,6 +251,8 @@ async fn repeated_calls_are_detected_as_stagnation() {
             memory: None,
             subagents: None,
             plugins: None,
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -308,6 +316,8 @@ async fn distinct_calls_exhaust_the_step_cap() {
             memory: None,
             subagents: None,
             plugins: None,
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -405,6 +415,8 @@ async fn memory_is_recalled_only_at_session_start() {
             memory: Some(&memory),
             subagents: None,
             plugins: None,
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -468,6 +480,8 @@ async fn memory_is_written_automatically_at_turn_end() {
             memory: Some(&memory),
             subagents: None,
             plugins: None,
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -532,6 +546,8 @@ async fn a_tight_budget_compacts_instead_of_failing() {
             memory: None,
             subagents: None,
             plugins: None,
+            steering: None,
+            instructions: None,
         },
     };
 
@@ -625,6 +641,8 @@ async fn subagent_delegation_returns_a_capped_report() {
             memory: None,
             subagents: Some(&host),
             plugins: None,
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -702,6 +720,8 @@ async fn fan_out_runs_subagents_and_keeps_result_order() {
             memory: None,
             subagents: Some(&host),
             plugins: None,
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -770,6 +790,8 @@ async fn fan_out_respects_the_per_turn_cap() {
             memory: None,
             subagents: Some(&host),
             plugins: None,
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -853,6 +875,8 @@ async fn plugin_gate_denies_and_the_denial_is_evidence() {
             memory: None,
             subagents: None,
             plugins: Some(&hooks),
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -916,6 +940,8 @@ async fn a_plugin_cannot_free_a_structural_deny() {
             memory: None,
             subagents: None,
             plugins: Some(&NoHooks),
+            steering: None,
+            instructions: None,
         },
     };
     let mut log = SessionLog::new();
@@ -936,4 +962,518 @@ async fn a_plugin_cannot_free_a_structural_deny() {
         |event| matches!(event, Event::PluginDispatch { hook, .. } if hook == "action.before"),
     );
     assert!(!consulted);
+}
+
+/// Passo do modelo que pede uma tool.
+fn tool_step(id: &str) -> Completion {
+    Completion {
+        text: String::new(),
+        reasoning: String::new(),
+        tool_calls: vec![call(id, "read_file", r#"{"path":"a.txt"}"#)],
+    }
+}
+
+/// Passo do modelo com texto final.
+fn text_step(text: &str) -> Completion {
+    Completion {
+        text: text.to_owned(),
+        reasoning: String::new(),
+        tool_calls: Vec::new(),
+    }
+}
+
+#[tokio::test]
+async fn max_steps_ends_with_a_textual_step_without_tools() {
+    let provider = FakeProvider::new(vec![
+        tool_step("1"),
+        tool_step("2"),
+        text_step("resumo: feito a, falta b"),
+    ]);
+    let executor = tools(
+        &["read_file"],
+        vec![ToolOutcome::ok("c1"), ToolOutcome::ok("c2")],
+    );
+    let guard = read_guard();
+    let budget = BudgetGate::new(100_000);
+    let logger = RecordingLogger::new();
+    let metrics = NoopMetrics;
+    let clock = FixedClock::new(Timestamp::from_millis(0));
+    let cancel = CancelToken::new();
+    let deps = Deps {
+        ports: Ports {
+            provider: &provider,
+            tools: &executor,
+            guard: &guard,
+            budget: &budget,
+            cancel: &cancel,
+        },
+        telemetry: Telemetry {
+            logger: &logger,
+            metrics: &metrics,
+            clock: &clock,
+        },
+        capabilities: Capabilities {
+            memory: None,
+            subagents: None,
+            plugins: None,
+            steering: None,
+            instructions: None,
+        },
+    };
+    let mut log = SessionLog::new();
+    let config = LoopConfig {
+        max_steps: 3,
+        ..LoopConfig::default()
+    };
+
+    let reason = run_turn(&mut log, &deps, "sys", "faz", &config).await;
+
+    assert_eq!(reason, StopReason::MaxSteps);
+    // O passo final (3.º) é pedido com zero tools.
+    assert_eq!(provider.tool_counts(), vec![1, 1, 0]);
+    assert_eq!(executor.recorded_calls().len(), 2);
+    assert_eq!(log.verify(), Vec::new());
+}
+
+#[tokio::test]
+async fn the_final_step_never_executes_tools() {
+    let provider = FakeProvider::new(vec![tool_step("1"), tool_step("2"), tool_step("3")]);
+    let executor = tools(
+        &["read_file"],
+        vec![ToolOutcome::ok("c1"), ToolOutcome::ok("c2")],
+    );
+    let guard = read_guard();
+    let budget = BudgetGate::new(100_000);
+    let logger = RecordingLogger::new();
+    let metrics = NoopMetrics;
+    let clock = FixedClock::new(Timestamp::from_millis(0));
+    let cancel = CancelToken::new();
+    let deps = Deps {
+        ports: Ports {
+            provider: &provider,
+            tools: &executor,
+            guard: &guard,
+            budget: &budget,
+            cancel: &cancel,
+        },
+        telemetry: Telemetry {
+            logger: &logger,
+            metrics: &metrics,
+            clock: &clock,
+        },
+        capabilities: Capabilities {
+            memory: None,
+            subagents: None,
+            plugins: None,
+            steering: None,
+            instructions: None,
+        },
+    };
+    let mut log = SessionLog::new();
+    let config = LoopConfig {
+        max_steps: 3,
+        ..LoopConfig::default()
+    };
+
+    let reason = run_turn(&mut log, &deps, "sys", "faz", &config).await;
+
+    assert_eq!(reason, StopReason::MaxSteps);
+    // A 3.ª chamada (passo final) nunca é executada.
+    assert_eq!(executor.recorded_calls().len(), 2);
+    assert_eq!(log.verify(), Vec::new());
+}
+
+#[tokio::test]
+async fn echo_is_never_accepted() {
+    let provider = FakeProvider::new(vec![text_step("le a.txt"), text_step("le a.txt")]);
+    let executor = tools(&["read_file"], Vec::new());
+    let guard = read_guard();
+    let budget = BudgetGate::new(100_000);
+    let logger = RecordingLogger::new();
+    let metrics = NoopMetrics;
+    let clock = FixedClock::new(Timestamp::from_millis(0));
+    let cancel = CancelToken::new();
+    let deps = Deps {
+        ports: Ports {
+            provider: &provider,
+            tools: &executor,
+            guard: &guard,
+            budget: &budget,
+            cancel: &cancel,
+        },
+        telemetry: Telemetry {
+            logger: &logger,
+            metrics: &metrics,
+            clock: &clock,
+        },
+        capabilities: Capabilities {
+            memory: None,
+            subagents: None,
+            plugins: None,
+            steering: None,
+            instructions: None,
+        },
+    };
+    let mut log = SessionLog::new();
+
+    let reason = run_turn(&mut log, &deps, "sys", "le a.txt", &LoopConfig::default()).await;
+
+    assert_eq!(reason, StopReason::Echo);
+    let last = log
+        .events()
+        .iter()
+        .rev()
+        .find_map(|event| match event {
+            Event::Assistant { content, .. } => Some(content.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+    assert!(last.contains("eco"), "{last}");
+}
+
+#[tokio::test]
+async fn a_legit_answer_is_not_an_echo() {
+    let provider = FakeProvider::new(vec![text_step("O ficheiro a.txt tem tres linhas.")]);
+    let executor = tools(&["read_file"], Vec::new());
+    let guard = read_guard();
+    let budget = BudgetGate::new(100_000);
+    let logger = RecordingLogger::new();
+    let metrics = NoopMetrics;
+    let clock = FixedClock::new(Timestamp::from_millis(0));
+    let cancel = CancelToken::new();
+    let deps = Deps {
+        ports: Ports {
+            provider: &provider,
+            tools: &executor,
+            guard: &guard,
+            budget: &budget,
+            cancel: &cancel,
+        },
+        telemetry: Telemetry {
+            logger: &logger,
+            metrics: &metrics,
+            clock: &clock,
+        },
+        capabilities: Capabilities {
+            memory: None,
+            subagents: None,
+            plugins: None,
+            steering: None,
+            instructions: None,
+        },
+    };
+    let mut log = SessionLog::new();
+
+    let reason = run_turn(&mut log, &deps, "sys", "le a.txt", &LoopConfig::default()).await;
+
+    assert_eq!(reason, StopReason::EndTurn);
+}
+
+#[tokio::test]
+async fn declared_tool_calls_are_decoded_and_executed() {
+    let provider = FakeProvider::new(vec![
+        text_step(r#"{"name":"read_file","arguments":{"path":"a.txt"}}"#),
+        text_step("feito"),
+    ]);
+    let executor = tools(&["read_file"], vec![ToolOutcome::ok("conteudo")]);
+    let guard = read_guard();
+    let budget = BudgetGate::new(100_000);
+    let logger = RecordingLogger::new();
+    let metrics = NoopMetrics;
+    let clock = FixedClock::new(Timestamp::from_millis(0));
+    let cancel = CancelToken::new();
+    let deps = Deps {
+        ports: Ports {
+            provider: &provider,
+            tools: &executor,
+            guard: &guard,
+            budget: &budget,
+            cancel: &cancel,
+        },
+        telemetry: Telemetry {
+            logger: &logger,
+            metrics: &metrics,
+            clock: &clock,
+        },
+        capabilities: Capabilities {
+            memory: None,
+            subagents: None,
+            plugins: None,
+            steering: None,
+            instructions: None,
+        },
+    };
+    let mut log = SessionLog::new();
+
+    let reason = run_turn(&mut log, &deps, "sys", "le a.txt", &LoopConfig::default()).await;
+
+    assert_eq!(reason, StopReason::EndTurn);
+    assert_eq!(executor.recorded_calls().len(), 1);
+    // O texto declarado **nao** entra no log como resposta do assistente.
+    let leaked = log.events().iter().any(
+        |event| matches!(event, Event::Assistant { content, .. } if content.contains("\"name\"")),
+    );
+    assert!(!leaked);
+}
+
+/// Fonte de *steering* de teste: devolve as mensagens dadas, uma só vez.
+struct FakeSteering {
+    messages: Mutex<Vec<String>>,
+}
+
+impl FakeSteering {
+    fn new(messages: &[&str]) -> Self {
+        Self {
+            messages: Mutex::new(messages.iter().map(|text| (*text).to_owned()).collect()),
+        }
+    }
+}
+
+impl Steering for FakeSteering {
+    fn take(&self) -> Vec<String> {
+        std::mem::take(&mut *self.messages.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+}
+
+#[tokio::test]
+async fn steering_is_logged_and_delivered() {
+    let provider = FakeProvider::new(vec![tool_step("1"), text_step("feito")]);
+    let executor = tools(&["read_file"], vec![ToolOutcome::ok("c1")]);
+    let guard = read_guard();
+    let budget = BudgetGate::new(100_000);
+    let logger = RecordingLogger::new();
+    let metrics = NoopMetrics;
+    let clock = FixedClock::new(Timestamp::from_millis(0));
+    let cancel = CancelToken::new();
+    let steering = FakeSteering::new(&["muda de plano"]);
+    let deps = Deps {
+        ports: Ports {
+            provider: &provider,
+            tools: &executor,
+            guard: &guard,
+            budget: &budget,
+            cancel: &cancel,
+        },
+        telemetry: Telemetry {
+            logger: &logger,
+            metrics: &metrics,
+            clock: &clock,
+        },
+        capabilities: Capabilities {
+            memory: None,
+            subagents: None,
+            plugins: None,
+            steering: Some(&steering),
+            instructions: None,
+        },
+    };
+    let mut log = SessionLog::new();
+
+    let reason = run_turn(&mut log, &deps, "sys", "faz", &LoopConfig::default()).await;
+
+    assert_eq!(reason, StopReason::EndTurn);
+    // A mensagem é **logada** como `Steer` e entra no contexto do modelo.
+    let in_log = log
+        .events()
+        .iter()
+        .any(|event| matches!(event, Event::Steer { text } if text == "muda de plano"));
+    assert!(in_log);
+    let in_context = log
+        .derive_messages()
+        .iter()
+        .any(|message| matches!(message, Message::User { content } if content == "muda de plano"));
+    assert!(in_context, "model-visible <=> logged");
+    assert_eq!(log.verify(), Vec::new());
+}
+
+#[tokio::test]
+async fn tool_search_promotes_a_deferred_tool_to_the_next_request() {
+    let provider = FakeProvider::new(vec![
+        Completion {
+            text: String::new(),
+            reasoning: String::new(),
+            tool_calls: vec![call("1", "tool_search", r#"{"query":"procura padrao"}"#)],
+        },
+        Completion {
+            text: String::new(),
+            reasoning: String::new(),
+            tool_calls: vec![call("2", "grep", r#"{"pattern":"x"}"#)],
+        },
+        Completion {
+            text: "feito".to_owned(),
+            reasoning: String::new(),
+            tool_calls: Vec::new(),
+        },
+    ]);
+    let deferred = ToolSpec {
+        name: "grep".to_owned(),
+        description: "Procura um padrao no conteudo dos ficheiros".to_owned(),
+        parameters: r#"{"type":"object","properties":{"pattern":{"type":"string"}}}"#.to_owned(),
+    };
+    let executor =
+        tools(&["read_file"], vec![ToolOutcome::ok("achado")]).with_deferred(vec![deferred]);
+    // O conjunto do agente é a capacidade (inclui as diferidas e o `tool_search`).
+    let guard = StructuralGuard::new(
+        "/r",
+        [
+            "read_file".to_owned(),
+            "grep".to_owned(),
+            "tool_search".to_owned(),
+        ],
+        1,
+    );
+    let budget = BudgetGate::new(100_000);
+    let logger = RecordingLogger::new();
+    let metrics = NoopMetrics;
+    let clock = FixedClock::new(Timestamp::from_millis(0));
+    let cancel = CancelToken::new();
+    let deps = Deps {
+        ports: Ports {
+            provider: &provider,
+            tools: &executor,
+            guard: &guard,
+            budget: &budget,
+            cancel: &cancel,
+        },
+        telemetry: Telemetry {
+            logger: &logger,
+            metrics: &metrics,
+            clock: &clock,
+        },
+        capabilities: Capabilities {
+            memory: None,
+            subagents: None,
+            plugins: None,
+            steering: None,
+            instructions: None,
+        },
+    };
+    let mut log = SessionLog::new();
+
+    let reason = run_turn(&mut log, &deps, "sys", "procura", &LoopConfig::default()).await;
+
+    assert_eq!(reason, StopReason::EndTurn);
+    // A tool promovida foi executada (o guard conhecia-a) — e só ela.
+    let called: Vec<String> = executor
+        .recorded_calls()
+        .into_iter()
+        .map(|call| call.name)
+        .collect();
+    assert_eq!(called, ["grep"]);
+    // Catálogo por passo: `read_file` + `tool_search`; depois + `grep` (promovida).
+    assert_eq!(provider.tool_counts(), vec![2, 3, 3]);
+    // O carregamento nunca é silencioso.
+    assert!(
+        logger
+            .snapshot()
+            .iter()
+            .any(|record| record.event == events::TOOL_LOADED),
+        "tool.loaded deve ir pela porta Logger"
+    );
+    assert_eq!(log.verify(), Vec::new());
+}
+
+#[tokio::test]
+async fn local_instructions_are_attached_once_per_source() {
+    let provider = FakeProvider::new(vec![
+        Completion {
+            text: String::new(),
+            reasoning: String::new(),
+            tool_calls: vec![
+                call("1", "read_file", r#"{"path":"sub/a.md"}"#),
+                call("2", "read_file", r#"{"path":"sub/b.md"}"#),
+                call("3", "read_file", r#"{"path":"outro.md"}"#),
+            ],
+        },
+        Completion {
+            text: "feito".to_owned(),
+            reasoning: String::new(),
+            tool_calls: Vec::new(),
+        },
+    ]);
+    let executor = tools(
+        &["read_file"],
+        vec![
+            ToolOutcome::ok("a"),
+            ToolOutcome::ok("b"),
+            ToolOutcome::ok("c"),
+        ],
+    );
+    let guard = StructuralGuard::new("/r", ["read_file".to_owned()], 1);
+    let budget = BudgetGate::new(100_000);
+    let logger = RecordingLogger::new();
+    let metrics = NoopMetrics;
+    let clock = FixedClock::new(Timestamp::from_millis(0));
+    let cancel = CancelToken::new();
+    let instructions = MapInstructions::new()
+        .with_dir("", "AGENTS.md", "regra global")
+        .with_dir("sub/", "sub/AGENTS.md", "regra local");
+    let deps = Deps {
+        ports: Ports {
+            provider: &provider,
+            tools: &executor,
+            guard: &guard,
+            budget: &budget,
+            cancel: &cancel,
+        },
+        telemetry: Telemetry {
+            logger: &logger,
+            metrics: &metrics,
+            clock: &clock,
+        },
+        capabilities: Capabilities {
+            memory: None,
+            subagents: None,
+            plugins: None,
+            steering: None,
+            instructions: Some(&instructions),
+        },
+    };
+    let mut log = SessionLog::new();
+
+    let reason = run_turn(&mut log, &deps, "sys", "le", &LoopConfig::default()).await;
+
+    assert_eq!(reason, StopReason::EndTurn);
+    let results: Vec<String> = log
+        .events()
+        .iter()
+        .filter_map(|event| match event {
+            Event::ToolResult { content, .. } => Some(content.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(results.len(), 3);
+    // `sub/AGENTS.md` entra uma vez (o mais próximo ganha); a segunda leitura em
+    // `sub/` não o repete; a terceira (fora de `sub/`) traz o da raiz.
+    assert!(
+        results
+            .first()
+            .is_some_and(|text| text.contains("regra local"))
+    );
+    assert!(
+        results
+            .get(1)
+            .is_some_and(|text| !text.contains("instrucoes locais")),
+        "a segunda leitura nao repete as instrucoes"
+    );
+    assert!(
+        results
+            .get(2)
+            .is_some_and(|text| text.contains("regra global"))
+    );
+    assert!(
+        results
+            .first()
+            .is_some_and(|text| text.contains("[instrucoes locais: sub/AGENTS.md]"))
+    );
+    // O evento de contexto vai pela porta Logger (nunca em silêncio).
+    assert_eq!(
+        logger
+            .snapshot()
+            .iter()
+            .filter(|record| record.event == events::CONTEXT_LOCAL)
+            .count(),
+        2
+    );
+    assert_eq!(log.verify(), Vec::new());
 }

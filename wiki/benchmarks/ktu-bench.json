@@ -1,5 +1,6 @@
 {
   "binary": {
+    "basis": "measured",
     "ktu_release_bytes": 6029872
   },
   "host": {
@@ -9,46 +10,53 @@
     "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)"
   },
   "memory": {
-    "peak_rss_kib": 8292
+    "basis": "measured",
+    "peak_rss_kib": 8336
   },
   "samples": {
     "derive_messages_100": {
+      "basis": "measured",
       "iterations": 500,
-      "max_micros": 18,
-      "median_micros": 6,
+      "max_micros": 98,
+      "median_micros": 16,
       "min_micros": 5
     },
     "derive_messages_10k": {
+      "basis": "measured",
       "iterations": 50,
-      "max_micros": 1577,
-      "median_micros": 565,
-      "min_micros": 495
+      "max_micros": 1706,
+      "median_micros": 515,
+      "min_micros": 458
     },
     "derive_messages_1k": {
+      "basis": "measured",
       "iterations": 200,
-      "max_micros": 171,
-      "median_micros": 50,
-      "min_micros": 48
+      "max_micros": 162,
+      "median_micros": 47,
+      "min_micros": 45
     },
     "log_build_1k": {
+      "basis": "measured",
       "iterations": 200,
-      "max_micros": 67,
+      "max_micros": 66,
       "median_micros": 45,
       "min_micros": 44
     },
     "turn_1_step": {
+      "basis": "measured",
       "iterations": 200,
-      "max_micros": 38,
-      "median_micros": 6,
-      "min_micros": 4
+      "max_micros": 50,
+      "median_micros": 7,
+      "min_micros": 6
     },
     "turn_8_steps": {
+      "basis": "measured",
       "iterations": 100,
-      "max_micros": 14,
-      "median_micros": 12,
-      "min_micros": 11
+      "max_micros": 30,
+      "median_micros": 14,
+      "min_micros": 13
     }
   },
-  "schema": 1,
+  "schema": 2,
   "tool": "cargo bench -p ktu-core --bench core"
 }

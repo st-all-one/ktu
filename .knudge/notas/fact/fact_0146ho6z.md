@@ -1,0 +1,10 @@
+---
+id: fact_0146ho6z
+type: fact
+statement: "Receitas ricas: settings do frontmatter, $1..$9 e shell opt-in que passa pelos guardrails"
+created_at: 2026-10-18T03:20:35.753Z
+body_hash: 97f9e641
+schema_version: 2
+anchors: [crates/ktu-core/src/command.rs, crates/ktu-core/src/facade/mod.rs, crates/ktu-cli/src/command_run.rs, wiki/convencoes.md]
+---
+A9 (H10, implementado a pedido do dono antes da H11). CommandSettings{provider,base_url,model,max_steps} no frontmatter de .agents/commands/*.md (fail-closed se max_steps nao for inteiro); Command::render substitui $1..$9 (argumentos posicionais, com aspas simples/duplas) e $ARGUMENTS, e sem marcadores acrescenta os argumentos no fim; ShellAccess{Disabled,Guarded} - `shell: true` e OPT-IN e sem ele uma linha `!cmd` e texto normal (nunca executa por surpresa); Command::shell_segments() lista os segmentos. O ponto de seguranca: novo facade::evaluate_fact(spec, root, fs, fact) avalia um facto ISOLADO com o MESMO encadeamento da fachada (estrutural -> guardrails declarativos -> permissoes), para nao haver uma segunda composicao de guardrails (M4); ktu-cli/src/command_run.rs expande cada segmento SO depois de Decision::Allow, executando com a MESMA BashTool do turno (sem segundo motor de shell) e falhando com exit 1 + remedio accionavel em Deny (policy) ou Escalate (ask) - verificado a mao nos tres casos de permissao. Novo `ktu run --command <nome> [args]` (precedencia flag > comando > --params > config) e o REPL /nome usa o mesmo render (as settings sao ignoradas no REPL, com aviso, porque o provider e por sessao). O parse do slash saiu de repl.rs para ktu-cli/src/slash.rs (limite de 400 linhas). Continua fora: sub_recipes e parameters declarados (sem consumidor). Testes: 8 unit em command/tests.rs, run_command_applies_settings_and_guarded_shell.

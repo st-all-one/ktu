@@ -12,7 +12,7 @@ use ktu_port::protocol::{PortError, ServerMsg};
 
 use super::SessionHub;
 use crate::run::RunConfig;
-use crate::session_mode::SessionMode;
+use crate::session_mode::{SessionMode, SessionTarget};
 use crate::turn_runtime::ensure_layout;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -20,12 +20,14 @@ static COUNTER: AtomicU64 = AtomicU64::new(0);
 fn mock_config() -> RunConfig {
     RunConfig {
         provider: "mock".to_owned(),
+        script: None,
         base_url: String::new(),
         model: "eco".to_owned(),
         api_key: None,
         effort: "low".to_owned(),
         max_steps: 4,
-        session: "default".to_owned(),
+        deferred_tools: Vec::new(),
+        session: SessionTarget::Persistent("default".to_owned()),
         mode: SessionMode::Fresh,
         plan: false,
     }

@@ -1,6 +1,7 @@
 # `SYSTEM.md` / `APPEND_SYSTEM.md`
 
-- **Estado:** candidata (do `pi`) — **incorporar**.
+- **Estado:** **incorporada** (H10) — `.agents/SYSTEM.md` (substitui) e `.agents/APPEND_SYSTEM.md`
+  (acrescenta), com o nível do utilizador em `~/.config/ktu/` e **projecto > utilizador**; fail-open.
 - **Origem:** `REF/pi/packages/coding-agent/docs/configuration.md`;
   `wiki/revisao-pi-profunda.md` §1.5.
 - **Âncora:** `crates/ktu-core/src/prompt.rs`.

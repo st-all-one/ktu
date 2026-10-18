@@ -55,3 +55,44 @@ async fn plan_mode_denies_writes_and_persists_the_plan() {
         Some(1)
     );
 }
+
+#[tokio::test]
+async fn deferred_tools_leave_the_catalog_but_stay_executable() {
+    let fs = MemFs::new();
+    let clock = FixedClock::new(Timestamp::from_millis(0));
+    let root = PathBuf::from("/r");
+    let toolbox = Toolbox::new(&root, &fs, &clock, None)
+        .with_deferred(["glob".to_owned(), "grep".to_owned()]);
+
+    let declared: Vec<String> = toolbox.specs().into_iter().map(|spec| spec.name).collect();
+    let deferred: Vec<String> = toolbox
+        .deferred()
+        .into_iter()
+        .map(|spec| spec.name)
+        .collect();
+    assert!(!declared.contains(&"glob".to_owned()), "{declared:?}");
+    assert!(!declared.contains(&"grep".to_owned()), "{declared:?}");
+    assert!(declared.contains(&"read_file".to_owned()), "{declared:?}");
+    assert_eq!(deferred, ["glob", "grep"]);
+
+    // Diferida é só exposição: a execução continua a funcionar.
+    let outcome = toolbox
+        .execute(&call("glob", r#"{"pattern":"*.md"}"#))
+        .await;
+    assert!(!outcome.is_error, "{}", outcome.content);
+
+    // O `ScopedTools` cruza a exposição com o **conjunto do agente**: uma diferida
+    // fora do conjunto nunca é oferecida (nem por `tool_search`).
+    let scoped = ScopedTools::new(&toolbox, ["read_file".to_owned(), "glob".to_owned()]);
+    let names: Vec<String> = scoped
+        .deferred()
+        .into_iter()
+        .map(|spec| spec.name)
+        .collect();
+    assert_eq!(names, ["glob"]);
+    let scoped = ScopedTools::new(&toolbox, ["read_file".to_owned()]);
+    assert!(
+        scoped.deferred().is_empty(),
+        "glob nao esta no conjunto do agente"
+    );
+}

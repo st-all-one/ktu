@@ -1,6 +1,6 @@
 # Deteção de eco
 
-- **Estado:** candidata (do `katu`, L-Q4) — **incorporar**.
+- **Estado:** **implementado** (H5; `wiki/implementation_phase2/H5-fiabilidade-loop.md`).
 - **Origem:** `REF/katu/wiki/_ref/plan/OPTIMIZATION_PLAN.md` (WL2-3, KS-G5);
   `wiki/revisao-katu.md` §3.3.
 - **Âncora:** `crates/ktu-core/src/agent/mod.rs`.

@@ -12,11 +12,12 @@ use ktu_core::agent::{AgentRegistry, Capabilities, Deps, LoopConfig, Ports, Tele
 use ktu_core::budget::BudgetGate;
 use ktu_core::cancel::CancelToken;
 use ktu_core::guard::{AgentId, StructuralGuard};
-use ktu_core::ports::{Clock, Fs, Logger, Metrics};
+use ktu_core::ports::{Clock, Fs, Instructions, Logger, Metrics};
 use ktu_core::provider::Provider;
 use ktu_core::session::{Event, SessionLog};
 use ktu_core::store;
 use ktu_core::subagent::{SubagentHost, SubagentReport, SubagentRequest};
+use ktu_core::tool_search;
 use ktu_core::tools::{ScopedTools, ToolExecutor};
 
 /// Host de subagentes do front-end embedded.
@@ -35,6 +36,7 @@ pub(crate) struct CliSubagents<'a> {
     system: String,
     loop_config: LoopConfig,
     parent: String,
+    instructions: Option<&'a dyn Instructions>,
 }
 
 impl<'a> CliSubagents<'a> {
@@ -56,6 +58,7 @@ impl<'a> CliSubagents<'a> {
         system: String,
         loop_config: LoopConfig,
         parent: String,
+        instructions: &'a dyn Instructions,
     ) -> Self {
         Self {
             provider,
@@ -72,18 +75,31 @@ impl<'a> CliSubagents<'a> {
             system,
             loop_config,
             parent,
+            instructions: Some(instructions),
         }
     }
 }
 
 #[async_trait]
 impl SubagentHost for CliSubagents<'_> {
+    fn agents(&self) -> Vec<String> {
+        self.registry.subagent_names()
+    }
+
     async fn run(&self, request: SubagentRequest) -> Result<SubagentReport, String> {
-        let spec = self
-            .registry
-            .get_by_name(&request.agent)
-            .ok_or_else(|| format!("subagente desconhecido: {}", request.agent))?;
-        if spec.id() == AgentId::Primary {
+        let spec = self.registry.get_by_name(&request.agent).ok_or_else(|| {
+            let names = self.registry.subagent_names();
+            if names.is_empty() {
+                format!("subagente desconhecido: {}", request.agent)
+            } else {
+                format!(
+                    "subagente desconhecido: {}; disponiveis: {}",
+                    request.agent,
+                    names.join(", ")
+                )
+            }
+        })?;
+        if *spec.id() == AgentId::Primary {
             return Err("delegacao para o agente primario recusada".to_owned());
         }
         let session_id = request
@@ -96,8 +112,12 @@ impl SubagentHost for CliSubagents<'_> {
                 .unwrap_or_default(),
             None => SessionLog::new(),
         };
-        let guard = StructuralGuard::for_spec(self.root, spec);
-        let scoped = ScopedTools::new(self.tools, spec.tool_names());
+        let mut names = spec.tool_names();
+        if !self.tools.deferred().is_empty() {
+            names.push(tool_search::TOOL.to_owned());
+        }
+        let guard = StructuralGuard::new(self.root, names.clone(), spec.max_depth());
+        let scoped = ScopedTools::new(self.tools, names);
         let deps = Deps {
             ports: Ports {
                 provider: self.provider,
@@ -115,10 +135,18 @@ impl SubagentHost for CliSubagents<'_> {
                 memory: None,
                 subagents: None,
                 plugins: None,
+                steering: None,
+                instructions: self.instructions,
             },
         };
         let prompt = compose_prompt(&request);
         let _reason = run_turn(&mut log, &deps, &self.system, &prompt, &self.loop_config).await;
+        std::fs::create_dir_all(&self.sessions_dir).map_err(|error| {
+            format!(
+                "nao foi possivel criar {}: {error}",
+                self.sessions_dir.display()
+            )
+        })?;
         store::save(self.fs, &self.sessions_dir, &session_id, &log)
             .map_err(|error| format!("nao foi possivel gravar a sessao-filha: {error}"))?;
         write_parent_meta(self.fs, &self.sessions_dir, &session_id, &self.parent);

@@ -4,10 +4,10 @@
 //! ficheiro. Uma regra declarativa nunca desliga invariantes estruturais — só
 //! pode **apertar** (`decision: deny`); regras que tentam permitir são ignoradas.
 
-use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::Path;
 
+use crate::frontmatter::{self, required};
 use crate::guard::{AgentId, Decision, DenyReason, Fact, Guard};
 use crate::ports::Fs;
 
@@ -23,6 +23,15 @@ pub enum FactKind {
     Path,
 }
 
+/// Veredicto de uma regra declarativa (só pode **apertar**, I16).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RuleDecision {
+    /// Nega o efeito.
+    Deny,
+    /// Requer aprovação humana (nunca é transformado em `Allow`).
+    Escalate,
+}
+
 /// Uma regra declarativa carregada e validada.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Rule {
@@ -34,16 +43,22 @@ pub struct Rule {
     pub fact: FactKind,
     /// Valor a casar (nome de tool ou glob de path).
     pub matcher: String,
+    /// Veredicto (`deny` ou `escalate`).
+    pub decision: RuleDecision,
     /// Razão humana (o documento é a regra e a razão).
     pub reason: String,
+    /// Remédio acionável próprio da regra (dado opcional).
+    pub remedy: Option<String>,
 }
 
 impl Rule {
     /// `true` se a regra casa o facto dado.
     #[must_use]
     pub fn matches(&self, fact: &Fact) -> bool {
-        if let Some(agent) = self.applies_to
-            && agent != fact.agent
+        if self
+            .applies_to
+            .as_ref()
+            .is_some_and(|agent| *agent != fact.agent)
         {
             return false;
         }
@@ -66,8 +81,8 @@ impl Rule {
 /// Devolve mensagem (com o nome do ficheiro) se o frontmatter faltar, tiver
 /// campos em falta, versão não suportada ou valores desconhecidos.
 pub fn parse(file: &str, text: &str) -> Result<Option<Rule>, String> {
-    let map =
-        frontmatter(text).ok_or_else(|| format!("{file}: frontmatter ausente ou malformado"))?;
+    let map = frontmatter::parse(text)
+        .ok_or_else(|| format!("{file}: frontmatter ausente ou malformado"))?;
     let id = required(&map, file, "id")?;
     let version: u32 = required(&map, file, "version")?
         .parse()
@@ -75,9 +90,12 @@ pub fn parse(file: &str, text: &str) -> Result<Option<Rule>, String> {
     if version != SCHEMA_VERSION {
         return Err(format!("{file}: versao de schema nao suportada: {version}"));
     }
-    if required(&map, file, "decision")? != "deny" {
-        return Ok(None);
-    }
+    let decision = match required(&map, file, "decision")?.as_str() {
+        "deny" => RuleDecision::Deny,
+        "escalate" => RuleDecision::Escalate,
+        // Uma regra que tente permitir é ignorada, nunca aplicada (I16).
+        _ => return Ok(None),
+    };
     let applies_to = match map.get("applies_to").map(String::as_str) {
         None | Some("*") => None,
         Some(name) => Some(
@@ -92,12 +110,15 @@ pub fn parse(file: &str, text: &str) -> Result<Option<Rule>, String> {
     };
     let matcher = required(&map, file, "match")?;
     let reason = required(&map, file, "reason")?;
+    let remedy = map.get("remedy").cloned().filter(|value| !value.is_empty());
     Ok(Some(Rule {
         id,
         applies_to,
         fact,
         matcher,
+        decision,
         reason,
+        remedy,
     }))
 }
 
@@ -168,11 +189,20 @@ impl DeclarativeGuard {
 
 impl Guard for DeclarativeGuard {
     fn evaluate(&self, fact: &Fact) -> Decision {
-        if self.rules.iter().any(|rule| rule.matches(fact)) {
-            Decision::Deny(DenyReason::Guardrail)
-        } else {
-            Decision::Allow
+        match self.rules.iter().find(|rule| rule.matches(fact)) {
+            Some(rule) => match rule.decision {
+                RuleDecision::Deny => Decision::Deny(DenyReason::Guardrail),
+                RuleDecision::Escalate => Decision::Escalate,
+            },
+            None => Decision::Allow,
         }
+    }
+
+    fn remedy(&self, fact: &Fact) -> Option<String> {
+        self.rules
+            .iter()
+            .find(|rule| rule.matches(fact))
+            .and_then(|rule| rule.remedy.clone())
     }
 }
 
@@ -200,53 +230,13 @@ impl Guard for ChainGuard<'_> {
             deny => deny,
         }
     }
-}
 
-/// Extrai o frontmatter `---` de um documento estruturado.
-fn frontmatter(text: &str) -> Option<BTreeMap<String, String>> {
-    let mut lines = text.lines();
-    if lines.next()?.trim() != "---" {
-        return None;
-    }
-    let mut map = BTreeMap::new();
-    for line in lines {
-        let trimmed = line.trim();
-        if trimmed == "---" {
-            return Some(map);
+    fn remedy(&self, fact: &Fact) -> Option<String> {
+        match self.first.evaluate(fact) {
+            Decision::Allow => self.second.remedy(fact),
+            _ => self.first.remedy(fact),
         }
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        let (key, value) = trimmed.split_once(':')?;
-        map.insert(key.trim().to_owned(), unquote(value.trim()));
     }
-    None
-}
-
-/// Remove aspas envolventes de um valor escalar.
-fn unquote(value: &str) -> String {
-    let bytes = value.as_bytes();
-    let first = bytes.first().copied();
-    let last = bytes.last().copied();
-    let quoted = matches!(
-        (first, last),
-        (Some(b'"'), Some(b'"')) | (Some(b'\''), Some(b'\''))
-    );
-    if quoted && bytes.len() >= 2 {
-        return value
-            .get(1..value.len().saturating_sub(1))
-            .unwrap_or("")
-            .to_owned();
-    }
-    value.to_owned()
-}
-
-/// Lê um campo obrigatório e não vazio.
-fn required(map: &BTreeMap<String, String>, file: &str, key: &str) -> Result<String, String> {
-    map.get(key)
-        .filter(|value| !value.is_empty())
-        .cloned()
-        .ok_or_else(|| format!("{file}: campo `{key}` em falta"))
 }
 
 /// Casa um glob simples (apenas `*`) contra um texto.

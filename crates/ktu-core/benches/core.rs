@@ -8,7 +8,8 @@
 //! cargo bench -p ktu-core --bench core
 //! ```
 //!
-//! Saída: `wiki/benchmarks/ktu-bench.json` (um argumento opcional sobrepõe).
+//! Saída: `wiki/benchmarks/ktu-bench.json` (um argumento opcional sobrepõe). Cada número
+//! declara a **base de evidência** (`basis: measured`); ver `wiki/metodo-medicao.md`.
 
 #![allow(
     clippy::disallowed_methods,
@@ -53,6 +54,7 @@ impl Bench {
             samples.insert(
                 (*name).to_owned(),
                 serde_json::json!({
+                    "basis": "measured",
                     "iterations": values.len(),
                     "min_micros": values.iter().copied().min().unwrap_or(0),
                     "median_micros": median(values),
@@ -190,6 +192,8 @@ fn bench_turn(rt: &Runtime, bench: &mut Bench, name: &'static str, steps: u32, i
                 memory: None,
                 subagents: None,
                 plugins: None,
+                steering: None,
+                instructions: None,
             },
         };
         let config = LoopConfig {
@@ -308,7 +312,7 @@ fn main() {
     bench_turn(&rt, &mut bench, "turn_8_steps", 8, 100);
 
     let artifact = serde_json::json!({
-        "schema": 1,
+        "schema": 2,
         "tool": "cargo bench -p ktu-core --bench core",
         "host": {
             "arch": std::env::consts::ARCH,
@@ -317,8 +321,9 @@ fn main() {
             "rustc": rustc_version(),
         },
         "samples": bench.json(),
-        "memory": { "peak_rss_kib": peak_rss_kib() },
-        "binary": { "ktu_release_bytes": binary_size() },
+        // `basis` (método de medição): tudo aqui é `measured` — o que não for, não entra.
+        "memory": { "basis": "measured", "peak_rss_kib": peak_rss_kib() },
+        "binary": { "basis": "measured", "ktu_release_bytes": binary_size() },
     });
 
     emit_table(&bench);

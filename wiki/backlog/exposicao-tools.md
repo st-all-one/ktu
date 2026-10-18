@@ -1,6 +1,8 @@
 # Exposição de tools (declared/deferred) + `tool_search`
 
-- **Estado:** candidata (do `pi`) — **incorporar**.
+- **Estado:** **incorporada** (H10) — `deferred_tools` em `.agents/config.toml` (exposição como
+  **dado**), `tool_search` com ranking BM25 determinístico, promoção para o **pedido seguinte**
+  registada em `tool.loaded`; a tool sai do catálogo mas continua no conjunto do agente.
 - **Origem:** `REF/pi/packages/coding-agent/src/extensions/tool-search/tool.ts`,
   `core/extensions/types.ts` (`ToolExposure`); `wiki/revisao-pi-profunda.md` §1.1.
 - **Âncora:** `crates/ktu-core/src/tools.rs`, `crates/ktu-core/src/prompt.rs`.

@@ -1,0 +1,18 @@
+# Teto de superfície pública (H11) — a superfície do `ktu` não cresce em silêncio.
+#
+# A medida é `ktu self surface` (subcomandos + flags da árvore do `clap`, tools do
+# catálogo builtin + as do loop). `make check` corre `xtask check-surface`: se a medida
+# exceder o teto, o gate falha — subir o teto é uma alteração **explícita**, na mesma
+# alteração que o justifica (ver `wiki/adr/0011-limite-de-400-linhas-e-firewall-mecanico.md`
+# e `wiki/metodo-medicao.md`).
+#
+# Regra de poda (M1): subir o teto obriga a dizer **que consumidor** a superfície nova serve.
+#
+# Histórico das subidas:
+# - 2026-10-18 (H12): flags 87 → 88 — `ktu run --script <ficheiro>` (guião do `--provider
+#   scripted`), consumidor: os gates G10/G11 (ver `wiki/adr/0018-*.md`).
+
+[ceiling]
+subcommands = 47
+flags = 88
+tools = 13

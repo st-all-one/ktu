@@ -2,31 +2,115 @@
 
 use futures::future::join_all;
 
-use super::{Driver, support};
+use super::{Driver, LOCAL_INSTRUCTION_TOOLS, logging, support};
 use crate::domain::{ToolCall, ToolSpec};
+use crate::events;
 use crate::guard::{self, AgentId, Decision, DenyReason, Fact};
 use crate::plugin::HookPayload;
+use crate::ports::Level;
 use crate::session::Event;
 use crate::subagent;
+use crate::tool_search;
 use crate::tools::ToolOutcome;
 
 /// Efeito pendente de uma chamada de um passo.
 enum Pending {
     /// Corre a chamada como subagente (em fan-out com as restantes).
     Delegate,
-    /// Executa a chamada como tool normal, já com a decisão do guardrail.
-    Effect(Decision),
+    /// Executa a chamada como tool normal, já com a decisão e o remédio do guardrail.
+    Effect {
+        /// Decisão do guardrail.
+        decision: Decision,
+        /// Remédio acionável (o que fazer a seguir).
+        remedy: Option<String>,
+    },
     /// Resultado já pronto (ex.: recusada por cap), sem execução.
     Ready(ToolOutcome),
 }
 
-/// Tools oferecidas ao modelo: as do executor, mais `subagent` quando há host.
+/// Tools oferecidas ao modelo: as declaradas pelo executor, mais `subagent` quando
+/// há host e `tool_search` quando existem tools **diferidas**.
 pub(super) fn driver_specs(deps: &super::Deps<'_>) -> Vec<ToolSpec> {
     let mut specs = deps.ports.tools.specs();
-    if deps.capabilities.subagents.is_some() {
-        specs.push(subagent::spec());
+    if let Some(host) = deps.capabilities.subagents {
+        specs.push(subagent::spec_with(&host.agents()));
+    }
+    if !deps.ports.tools.deferred().is_empty() {
+        specs.push(tool_search::spec());
     }
     specs
+}
+
+impl Driver<'_, '_> {
+    /// Anexa as **instruções locais** (`AGENTS.md` mais próximo) ao resultado de
+    /// uma leitura de ficheiro: uma vez por turno e por fonte, para não repetir
+    /// contexto. Fica no resultado da tool — logo, no log (*model-visible ⟺ logged*).
+    pub(super) fn with_local_instructions(
+        &mut self,
+        call: &ToolCall,
+        outcome: ToolOutcome,
+    ) -> ToolOutcome {
+        if outcome.is_error || !LOCAL_INSTRUCTION_TOOLS.contains(&call.name.as_str()) {
+            return outcome;
+        }
+        let deps = self.deps;
+        let Some(instructions) = deps.capabilities.instructions else {
+            return outcome;
+        };
+        let Some(path) = guard::path_argument(&call.arguments) else {
+            return outcome;
+        };
+        let Some(local) = instructions.nearest(&path) else {
+            return outcome;
+        };
+        if !self.injected.insert(local.source.clone()) {
+            return outcome;
+        }
+        logging::log_event(
+            deps,
+            Level::Info,
+            events::CONTEXT_LOCAL,
+            "instrucoes locais anexadas",
+            &[("source", local.source.as_str())],
+        );
+        ToolOutcome {
+            content: format!(
+                "{}\n\n[instrucoes locais: {}]\n{}",
+                outcome.content, local.source, local.text
+            ),
+            is_error: false,
+        }
+    }
+
+    /// Corre `tool_search`: ranqueia as tools diferidas (BM25) e **promove** as
+    /// melhores ao catálogo — ficam declaradas no **próximo** pedido e o
+    /// carregamento é registado no log (`tool.loaded`), nunca em silêncio.
+    pub(super) fn search_deferred(&mut self, call: &ToolCall) -> ToolOutcome {
+        let deps = self.deps;
+        let query = match tool_search::parse_query(&call.arguments) {
+            Ok(query) => query,
+            Err(error) => return ToolOutcome::error(error),
+        };
+        let found: Vec<ToolSpec> = tool_search::rank(&query, &self.deferred, tool_search::TOP_K)
+            .into_iter()
+            .filter_map(|index| self.deferred.get(index).cloned())
+            .collect();
+        for spec in &found {
+            if !self.specs.iter().any(|known| known.name == spec.name) {
+                self.specs.push(spec.clone());
+            }
+            logging::log_event(
+                deps,
+                Level::Info,
+                events::TOOL_LOADED,
+                "tool diferida carregada",
+                &[("tool", spec.name.as_str())],
+            );
+        }
+        let promoted: Vec<String> = found.iter().map(|spec| spec.name.clone()).collect();
+        self.deferred.retain(|spec| !promoted.contains(&spec.name));
+        ToolOutcome::ok(tool_search::render(&found, self.deferred.len()))
+    }
 }
 
 /// Executa uma delegação `subagent` pela porta do host e capa o relatório.
@@ -62,8 +146,11 @@ impl Driver<'_, '_> {
             usize::try_from(self.config.max_subagents_per_turn).unwrap_or(usize::MAX);
         let mut pending = Vec::with_capacity(calls.len());
         let mut delegated = 0usize;
-        for (call, decision) in calls.iter().zip(&decisions) {
-            if call.name == subagent::TOOL && matches!(decision, Decision::Allow) {
+        for (call, (decision, remedy)) in calls.iter().zip(&decisions) {
+            if call.name == tool_search::TOOL && matches!(decision, Decision::Allow) {
+                support::log_tool_call(deps, &call.name);
+                pending.push(Pending::Ready(self.search_deferred(call)));
+            } else if call.name == subagent::TOOL && matches!(decision, Decision::Allow) {
                 if delegated < max_subagents {
                     delegated = delegated.saturating_add(1);
                     support::log_tool_call(deps, &call.name);
@@ -74,7 +161,10 @@ impl Driver<'_, '_> {
                     )));
                 }
             } else {
-                pending.push(Pending::Effect(*decision));
+                pending.push(Pending::Effect {
+                    decision: *decision,
+                    remedy: remedy.clone(),
+                });
             }
         }
         let delegated_calls: Vec<&ToolCall> = calls
@@ -97,7 +187,9 @@ impl Driver<'_, '_> {
                 Pending::Delegate => reports
                     .next()
                     .unwrap_or_else(|| ToolOutcome::error("sem relatorio de subagente")),
-                Pending::Effect(decision) => self.execute_effect(call, decision).await,
+                Pending::Effect { decision, remedy } => {
+                    self.execute_effect(call, decision, remedy.as_deref()).await
+                }
             };
             outcomes.push(outcome);
         }
@@ -110,7 +202,11 @@ impl Driver<'_, '_> {
     ///
     /// Ordem fixa (I11): guardrail estrutural **primeiro**; só se for `Allow` os
     /// *gates* de plugin são consultados — nunca podem transformar `Deny` em `Allow`.
-    async fn evaluate_guard(&mut self, call: &ToolCall, remaining_steps: u32) -> Decision {
+    async fn evaluate_guard(
+        &mut self,
+        call: &ToolCall,
+        remaining_steps: u32,
+    ) -> (Decision, Option<String>) {
         let deps = self.deps;
         let fact = Fact {
             agent: AgentId::Primary,
@@ -147,11 +243,23 @@ impl Driver<'_, '_> {
             decision: reason,
         };
         support::fire(deps, self.log, &mut payload).await;
-        decision
+        let remedy = if matches!(decision, Decision::Allow) {
+            None
+        } else if matches!(decision, Decision::Deny(DenyReason::Plugin)) {
+            Some(DenyReason::Plugin.remedy().to_owned())
+        } else {
+            deps.ports.guard.remedy(&fact)
+        };
+        (decision, remedy)
     }
 
     /// Executa o efeito de uma chamada já decidida (nunca para `subagent`).
-    async fn execute_effect(&mut self, call: &ToolCall, decision: Decision) -> ToolOutcome {
+    async fn execute_effect(
+        &mut self,
+        call: &ToolCall,
+        decision: Decision,
+        remedy: Option<&str>,
+    ) -> ToolOutcome {
         let deps = self.deps;
         if deps.ports.cancel.is_cancelled() {
             return ToolOutcome::error("cancelado pelo utilizador");
@@ -171,8 +279,14 @@ impl Driver<'_, '_> {
                 }
                 outcome
             }
-            Decision::Deny(reason) => ToolOutcome::error(format!("negado: {}", reason.as_str())),
-            Decision::Escalate => ToolOutcome::error("requer aprovacao (indisponivel nesta fase)"),
+            Decision::Deny(reason) => {
+                let remedy = remedy.unwrap_or_else(|| reason.remedy());
+                ToolOutcome::error(format!("negado: {} — {remedy}", reason.as_str()))
+            }
+            Decision::Escalate => ToolOutcome::error(format!(
+                "requer aprovacao: {}",
+                remedy.unwrap_or("requer aprovacao humana")
+            )),
         }
     }
 }

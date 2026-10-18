@@ -1,6 +1,7 @@
 # Slash commands (atalhos interactivos)
 
-- **Estado:** candidata (do `goose`) — a decidir.
+- **Estado:** **incorporada** (H10) — `/help`, `/plan`, `/build`, `/mode`, `/cancel`, `/quit`
+  (embutidos) + `/nome args` resolvido contra `.agents/commands/*.md` (comandos do projecto).
 - **Origem:** `REF/goose/crates/goose/src/slash_commands`; `wiki/revisao-goose.md` §2.2.
 - **Âncora:** `crates/ktu-cli/src/tui.rs`, `crates/ktu-port/src/protocol.rs`.
 

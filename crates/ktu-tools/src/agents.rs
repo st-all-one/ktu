@@ -57,8 +57,8 @@ mod tests {
     #[test]
     fn explorer_is_read_only() {
         let registry = default_registry();
-        assert!(registry.get(AgentId::Explorer).is_some());
-        let Some(explorer) = registry.get(AgentId::Explorer) else {
+        assert!(registry.get(&AgentId::Explorer).is_some());
+        let Some(explorer) = registry.get(&AgentId::Explorer) else {
             return;
         };
         for tool in ["read_file", "list_dir", "glob", "grep", "memory_ask"] {

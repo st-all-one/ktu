@@ -1,12 +1,13 @@
 # ktu — alvos de qualidade e build.
-# Portão único: `make check` (fmt --check + clippy -D warnings + test + firewall + tamanho).
+# Portão único: `make check` (fmt --check + clippy -D warnings + test + firewall
+# + governança (adr/surface) + tamanho).
 
 CARGO ?= cargo
 
-.PHONY: check fmt clippy test build dist bench layers file-length quality deny machete typos supply-chain clean
+.PHONY: check fmt clippy test build dist bench layers adr surface gates file-length quality deny machete typos supply-chain clean
 
 ## Portão completo local: formatação, lints, testes, firewall de camadas e tamanho de ficheiro.
-check: fmt clippy test layers file-length
+check: fmt clippy test layers adr surface file-length
 
 ## Verifica formatação sem alterar.
 fmt:
@@ -36,7 +37,20 @@ bench:
 layers:
 	$(CARGO) run -q -p xtask -- check-layers
 
-## Nenhum ficheiro de produção passa de 300 linhas.
+## Registos de governança: ADRs com `Alternatives considered` + postmortems (H11).
+adr:
+	$(CARGO) run -q -p xtask -- check-adr
+
+## Teto de superfície pública: crescer exige subir `surface.toml` (H11).
+surface:
+	$(CARGO) run -q -p xtask -- check-surface
+
+## Gates da Fase 2 (G10–G15): correm o `ktu` e arquivam artefactos em `wiki/gates/`.
+## Não entram no `make check` (escrevem evidência versionada); correm-se no fecho de fase.
+gates:
+	$(CARGO) run -q -p xtask -- gates $(ARGS)
+
+## Nenhum ficheiro de produção passa de 400 linhas.
 file-length:
 	./scripts/check_file_length.sh
 

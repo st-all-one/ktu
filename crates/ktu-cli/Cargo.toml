@@ -22,6 +22,7 @@ ktu-memory.workspace = true
 ktu-plugin.workspace = true
 ktu-port.workspace = true
 clap.workspace = true
+clap_complete.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 async-trait.workspace = true

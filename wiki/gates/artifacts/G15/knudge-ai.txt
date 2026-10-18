@@ -1,0 +1,12 @@
+
+running 7 tests
+test ai_rejects_an_unknown_area ... ok
+test ai_absent_source_is_an_empty_success ... ok
+test ai_tolerates_malformed_lines_with_warning ... ok
+test ai_source_flag_overrides_the_convention ... ok
+test ai_session_log_area_reads_its_own_convention ... ok
+test ai_lists_and_recalls_a_jsonl_source ... ok
+test ask_filters_by_agent_and_activity ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+

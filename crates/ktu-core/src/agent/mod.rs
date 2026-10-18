@@ -4,13 +4,16 @@
 //! início), **derivado do log** (I3) e **cancelável** (I4). O turno termina
 //! sempre com uma `StopReason` (I5), nunca em silêncio.
 
+use std::collections::BTreeSet;
+
 mod delegation;
 mod deps;
 mod logging;
 mod spec;
 mod support;
+mod toolcall;
 
-pub use deps::{Capabilities, Deps, LoopConfig, Ports, Telemetry};
+pub use deps::{Capabilities, Deps, LoopConfig, Ports, Steering, Telemetry};
 pub use spec::{AgentRegistry, AgentSpec};
 
 use crate::compact::keep_from_for_turns;
@@ -27,14 +30,30 @@ use logging::{
     log_event, log_kernel_error, log_model_output, log_model_request, log_provider_error,
 };
 use support::{
-    Stagnation, augment_with_memory, fire, has_turn, reason_str, record_session_end,
+    Stagnation, augment_with_memory, fire, has_turn, is_echo, reason_str, record_session_end,
     resolve_synthetic, signature,
 };
 
 /// Turnos recentes mantidos verbatim quando o contexto é compactado.
 const KEEP_TURNS: usize = 4;
 
+/// Tools de **leitura de ficheiro** que anexam as instruções locais do directório.
+pub(super) const LOCAL_INSTRUCTION_TOOLS: &[&str] = &["read_file", "edit_file"];
+
+/// Instrução do passo final (`MaxSteps`): resumo em texto, sem tools.
+const SUMMARY_INSTRUCTION: &str = "Limite de passos atingido. Responde apenas com texto: o que ficou feito, o que falta e o que recomendas. Nao uses tools.";
+
+/// *Nudge* de eco (um retry): pede conteudo novo.
+const ECHO_NUDGE: &str =
+    "A tua resposta repetiu o pedido ou uma resposta anterior. Responde com conteudo novo.";
+
+/// Nota visível quando o eco persiste — o eco **nunca** é aceite (G5).
+const ECHO_NOTE: &str = "[eco: o modelo repetiu o pedido; resposta nao aceite]";
+
 /// Corre um turno completo e devolve a razão de término (I5).
+///
+/// É a API de **baixo nível** (DI explícita). Quem embute o ktu usa a fachada
+/// [`crate::facade::Ktu`], que faz esta composição — este caminho é interno.
 pub async fn run_turn(
     log: &mut SessionLog,
     deps: &Deps<'_>,
@@ -66,7 +85,11 @@ pub async fn run_turn(
             system,
             config,
             specs: driver_specs(deps),
+            deferred: deps.ports.tools.deferred(),
+            injected: BTreeSet::new(),
             stagnation: Stagnation::new(config.max_stagnation),
+            nudge: None,
+            echo_retried: false,
         };
         driver.run().await
     };
@@ -94,6 +117,15 @@ enum Step {
     Stop(StopReason),
 }
 
+/// Natureza do passo: normal (tools activas) ou final (`MaxSteps`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    /// Passo normal.
+    Normal,
+    /// Passo final: tools desactivadas e pedido de resumo.
+    Final,
+}
+
 /// Estado mutável do loop, com as dependências injectadas.
 struct Driver<'a, 'd> {
     log: &'a mut SessionLog,
@@ -101,33 +133,53 @@ struct Driver<'a, 'd> {
     system: &'a str,
     config: &'a LoopConfig,
     specs: Vec<ToolSpec>,
+    deferred: Vec<ToolSpec>,
+    injected: BTreeSet<String>,
     stagnation: Stagnation,
+    nudge: Option<String>,
+    echo_retried: bool,
 }
 
 impl Driver<'_, '_> {
     async fn run(&mut self) -> StopReason {
         let max_steps = self.config.max_steps;
         for index in 0..max_steps {
-            if let Step::Stop(reason) = self.step(index).await {
+            let final_step = index.saturating_add(1) >= max_steps;
+            let phase = if final_step {
+                Phase::Final
+            } else {
+                Phase::Normal
+            };
+            if final_step {
+                self.nudge = Some(SUMMARY_INSTRUCTION.to_owned());
+            }
+            if let Step::Stop(reason) = self.step(index, phase).await {
                 return reason;
             }
         }
         StopReason::MaxSteps
     }
 
-    async fn step(&mut self, index: u32) -> Step {
+    async fn step(&mut self, index: u32, phase: Phase) -> Step {
+        let final_step = phase == Phase::Final;
         let deps = self.deps;
         if deps.ports.cancel.is_cancelled() {
             return Step::Stop(StopReason::Cancelled);
         }
+        self.inject_steering(deps);
         let Some(messages) = self.fit_messages() else {
             log_kernel_error(deps, "orcamento de contexto excedido");
             return Step::Stop(StopReason::Error);
         };
+        let tools = if final_step {
+            Vec::new()
+        } else {
+            self.specs.clone()
+        };
         let request = ProviderRequest {
             system: self.system.to_owned(),
             messages,
-            tools: self.specs.clone(),
+            tools,
             cancel: deps.ports.cancel.clone(),
         };
         log_model_request(deps, request.messages.len(), request.tools.len());
@@ -160,13 +212,53 @@ impl Driver<'_, '_> {
         if let HookPayload::ModelOutput { text } = hook {
             completion.text = text;
         }
+        if completion.tool_calls.is_empty()
+            && let Some(declared) = toolcall::decode(&completion.text, &self.specs)
+        {
+            // O texto declarado **nao** entra no log como mensagem do assistente.
+            completion.tool_calls = declared;
+            completion.text.clear();
+        }
         if completion.tool_calls.is_empty() {
+            let echoed = is_echo(&completion.text, self.log);
+            if echoed && !self.echo_retried {
+                self.echo_retried = true;
+                self.nudge = Some(ECHO_NUDGE.to_owned());
+                self.log.push(Event::Assistant {
+                    content: completion.text,
+                    reasoning: completion.reasoning,
+                    tool_calls: Vec::new(),
+                });
+                return Step::Continue;
+            }
+            let content = if echoed {
+                ECHO_NOTE.to_owned()
+            } else {
+                completion.text
+            };
             self.log.push(Event::Assistant {
-                content: completion.text,
+                content,
                 reasoning: completion.reasoning,
                 tool_calls: Vec::new(),
             });
-            return Step::Stop(StopReason::EndTurn);
+            let reason = if final_step {
+                StopReason::MaxSteps
+            } else if echoed {
+                StopReason::Echo
+            } else {
+                StopReason::EndTurn
+            };
+            return Step::Stop(reason);
+        }
+        if final_step {
+            // Tools desactivadas no passo final: nunca executa, mesmo que o modelo insista.
+            self.log.push(Event::Assistant {
+                content: completion.text,
+                reasoning: completion.reasoning,
+                tool_calls: completion.tool_calls.clone(),
+            });
+            resolve_synthetic(deps, self.log, &completion.tool_calls, "limite de passos");
+            return Step::Stop(StopReason::MaxSteps);
         }
         self.stagnation.observe(signature(&completion.tool_calls));
         self.log.push(Event::Assistant {
@@ -179,13 +271,62 @@ impl Driver<'_, '_> {
             return Step::Stop(StopReason::Stalled);
         }
         let remaining = self.config.max_steps.saturating_sub(index);
-        self.run_calls(&completion.tool_calls, remaining).await;
+        let repaired = self.repaired(&completion.tool_calls);
+        self.run_calls(&repaired, remaining).await;
         Step::Continue
+    }
+
+    /// Entrega o *steering* pendente numa **fronteira segura** (início do passo).
+    ///
+    /// A mensagem é logada **antes** de entrar no contexto, preservando
+    /// *model-visible ⟺ logged*; a ordem é a de chegada.
+    fn inject_steering(&mut self, deps: &Deps<'_>) {
+        let Some(steering) = deps.capabilities.steering else {
+            return;
+        };
+        for text in steering.take() {
+            log_event(
+                deps,
+                Level::Info,
+                events::STEER,
+                "mensagem de steering entregue",
+                &[],
+            );
+            self.log.push(Event::Steer { text });
+        }
+    }
+
+    /// Repara os argumentos das chamadas contra o schema (só quando inequívoco).
+    fn repaired(&self, calls: &[ToolCall]) -> Vec<ToolCall> {
+        calls
+            .iter()
+            .map(|call| {
+                let spec = self.specs.iter().find(|spec| spec.name == call.name);
+                ToolCall {
+                    id: call.id.clone(),
+                    name: call.name.clone(),
+                    arguments: toolcall::repair_arguments(&call.arguments, spec),
+                }
+            })
+            .collect()
     }
 
     /// Projecta as mensagens e garante que cabem no orçamento, compactando uma vez
     /// se necessário. `None` quando nem compactado cabe.
     fn fit_messages(&mut self) -> Option<Vec<Message>> {
+        let deps = self.deps;
+        let mut messages = self.derive();
+        if !deps.ports.budget.fits(self.system, &messages) && self.compact_once() {
+            messages = self.derive();
+        }
+        deps.ports
+            .budget
+            .fits(self.system, &messages)
+            .then_some(messages)
+    }
+
+    /// Deriva as mensagens do log e junta o *nudge* pendente (eco/passo final).
+    fn derive(&self) -> Vec<Message> {
         let deps = self.deps;
         let mut messages = crate::instrument!(
             deps.telemetry.metrics,
@@ -193,18 +334,12 @@ impl Driver<'_, '_> {
             "derive_messages",
             self.log.derive_messages()
         );
-        if !deps.ports.budget.fits(self.system, &messages) && self.compact_once() {
-            messages = crate::instrument!(
-                deps.telemetry.metrics,
-                deps.telemetry.clock,
-                "derive_messages",
-                self.log.derive_messages()
-            );
+        if let Some(nudge) = &self.nudge {
+            messages.push(Message::User {
+                content: nudge.clone(),
+            });
         }
-        deps.ports
-            .budget
-            .fits(self.system, &messages)
-            .then_some(messages)
+        messages
     }
 
     /// Compacta o contexto uma vez (mantém os últimos `KEEP_TURNS`). `true` se mudou.
@@ -228,6 +363,7 @@ impl Driver<'_, '_> {
     }
 
     fn push_result(&mut self, call: &ToolCall, outcome: ToolOutcome) {
+        let outcome = self.with_local_instructions(call, outcome);
         // Ponto único de emissão de `tool.result`: garante o evento pela porta de
         // log para **todo** o desfecho (executado, negado, cap, sintético).
         support::log_tool_result(self.deps, &call.name, &outcome);

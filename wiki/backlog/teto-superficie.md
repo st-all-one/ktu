@@ -1,6 +1,8 @@
 # Teto de superfície
 
-- **Estado:** candidata (do `katu`) — **incorporar**.
+- **Estado:** **incorporada** (H11) — `surface.toml` (teto) + `ktu self surface` (medida: árvore
+  do `clap` + catálogo builtin) + `xtask check-surface` no `make check`: crescer exige subir o teto
+  na mesma alteração.
 - **Origem:** `REF/katu/surface.toml`, `xtask check-surface`; `wiki/revisao-katu.md` §1.5.
 - **Âncora:** `crates/ktu-cli/src/cli.rs`, `xtask/src/main.rs`.
 

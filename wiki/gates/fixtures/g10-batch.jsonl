@@ -1,0 +1,15 @@
+{"prompt": "le src/lib.rs"}
+{"prompt": "le Cargo.toml"}
+{"prompt": "corrige a soma em src/lib.rs"}
+{"prompt": "corre os testes"}
+{"prompt": "confirma o resultado em src/lib.rs"}
+{"prompt": "acrescenta um modulo media com teste"}
+{"prompt": "liga o modulo em src/lib.rs"}
+{"prompt": "corre os testes"}
+{"prompt": "le README.md"}
+{"prompt": "documenta a media no README.md"}
+{"prompt": "corre os testes"}
+{"prompt": "le src/media.rs"}
+{"prompt": "revisao final de src/lib.rs"}
+{"prompt": "corre os testes"}
+{"prompt": "verifica e conclui"}

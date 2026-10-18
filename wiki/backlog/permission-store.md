@@ -1,6 +1,6 @@
 # Permission store (aprovações memorizadas)
 
-- **Estado:** candidata (do `goose`) — a decidir.
+- **Estado:** **implementado** (H6) — `.agents/permissions.toml` (`Always/Ask/Never`), `ktu permission ls|set|unset`; `Ask` → `Escalate`. TTL implícito não entrou (permissões explícitas no ficheiro).
 - **Origem:** `REF/goose/crates/goose/src/permission`; `wiki/revisao-goose.md` §2.3.
 - **Âncora:** `crates/ktu-core/src/guard.rs`, `crates/ktu-core/src/plan.rs` (`Approval`).
 

@@ -1,6 +1,8 @@
 # Dossiê de pendências
 
-- **Estado:** candidata (do `katu`) — **incorporar**.
+- **Estado:** **incorporada** (H11) — `wiki/pendencias.md`: estados ⛔🚫⏳🔴⚪ × eixos Q/P/S,
+  âncora no código, critério de reabertura por linha e rejeições com número; verificado contra o
+  código (nota de verificação na §1).
 - **Origem:** `REF/katu/wiki/crates/DOSSIE_PENDENCIAS.md`; `wiki/revisao-katu.md` §1.2.
 - **Âncora:** `STAGING.md`, `wiki/`.
 

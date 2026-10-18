@@ -9,25 +9,28 @@ use std::path::{Component, Path, PathBuf};
 use crate::agent::AgentSpec;
 
 /// Agente em execução (o conjunto de tools vem do seu `AgentSpec`, §2.6).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AgentId {
     /// Agente primário (vê todas as tools do seu conjunto).
     Primary,
     /// Subagente `explorer` (só leitura, estruturalmente).
     Explorer,
+    /// Agente **declarativo** do projecto (`.agents/agents/*.md`), por nome.
+    Named(Box<str>),
 }
 
 impl AgentId {
     /// Nome estável do agente.
     #[must_use]
-    pub const fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &str {
         match self {
             Self::Primary => "ktu",
             Self::Explorer => "explorer",
+            Self::Named(name) => name,
         }
     }
 
-    /// Interpreta o nome estável de um agente (`ktu`, `explorer`).
+    /// Interpreta o nome de um agente **embutido** (`ktu`, `explorer`).
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
@@ -35,6 +38,12 @@ impl AgentId {
             "explorer" => Some(Self::Explorer),
             _ => None,
         }
+    }
+
+    /// Identificador de um agente **declarativo** (nome arbitrário do projecto).
+    #[must_use]
+    pub fn named(name: &str) -> Self {
+        Self::Named(name.into())
     }
 }
 
@@ -68,6 +77,8 @@ pub enum DenyReason {
     Plugin,
     /// Negado por um guardrail declarativo (§2.8, camada 2).
     Guardrail,
+    /// Negado por uma permissão explícita do projecto (`Never`).
+    Policy,
 }
 
 impl DenyReason {
@@ -81,6 +92,24 @@ impl DenyReason {
             Self::DepthExceeded => "depth_exceeded",
             Self::Plugin => "plugin",
             Self::Guardrail => "guardrail",
+            Self::Policy => "policy",
+        }
+    }
+
+    /// Remédio acionável (o que fazer a seguir) — **dado**, não código.
+    ///
+    /// Um erro que ensina vale um turno: sem isto o modelo repete a mesma
+    /// chamada negada até o guard de loop cortar.
+    #[must_use]
+    pub const fn remedy(self) -> &'static str {
+        match self {
+            Self::Capability => "use uma tool do conjunto do agente (veja as tools oferecidas)",
+            Self::PathEscape => "use um caminho relativo sob o root da sessao",
+            Self::StepCap => "resuma o que fez e responda em texto, sem tools",
+            Self::DepthExceeded => "resolva no agente primario, sem novo subagente",
+            Self::Plugin => "ajuste o pedido ao que o plugin permite",
+            Self::Guardrail => "respeite o guardrail (veja .agents/guardrails)",
+            Self::Policy => "mude a permissao da tool (veja .agents/permissions.toml)",
         }
     }
 }
@@ -100,6 +129,17 @@ pub enum Decision {
 pub trait Guard: Send + Sync {
     /// Avalia um facto.
     fn evaluate(&self, fact: &Fact) -> Decision;
+
+    /// Remédio acionável da regra que negou (dado, não código).
+    ///
+    /// O remédio **estrutural** por [`DenyReason`] é o *default*; um guard que
+    /// tenha regras próprias (guardrails, permissões) pode devolver o seu.
+    fn remedy(&self, fact: &Fact) -> Option<String> {
+        match self.evaluate(fact) {
+            Decision::Deny(reason) => Some(reason.remedy().to_owned()),
+            _ => None,
+        }
+    }
 }
 
 /// Guard estrutural mínimo: capacidade, confinamento de path e caps.

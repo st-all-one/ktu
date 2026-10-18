@@ -10,6 +10,10 @@ use crate::compact::summarize;
 use crate::domain::{Message, StopReason, ToolCall, ToolCallId};
 use crate::plan::Mode;
 
+mod title;
+
+pub use title::{MAX_CHARS, MAX_WORDS, title_from, title_of};
+
 /// Um evento do log da sessão.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
@@ -18,6 +22,11 @@ pub enum Event {
     TurnStart {
         /// Instrução do utilizador.
         prompt: String,
+    },
+    /// *Steering*: mensagem do utilizador durante o turno (fronteira segura).
+    Steer {
+        /// Texto entregue ao modelo.
+        text: String,
     },
     /// Fim de um passo do modelo (texto, pensamento e/ou chamadas de tool).
     Assistant {
@@ -187,7 +196,8 @@ impl SessionLog {
                 }
                 Event::GuardDecision { .. }
                 | Event::ModeSet { .. }
-                | Event::PluginDispatch { .. } => {}
+                | Event::PluginDispatch { .. }
+                | Event::Steer { .. } => {}
             }
         }
         if open_turn {
@@ -205,6 +215,9 @@ fn project(event: &Event) -> Option<Message> {
     match event {
         Event::TurnStart { prompt } => Some(Message::User {
             content: prompt.clone(),
+        }),
+        Event::Steer { text } => Some(Message::User {
+            content: text.clone(),
         }),
         Event::Assistant {
             content,

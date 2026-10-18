@@ -4,7 +4,7 @@
 //! oferece ao modelo o que o `AgentSpec` declara, e a thread de tools rejeita
 //! por capacidade qualquer tool fora do conjunto (defesa em dupla camada).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::guard::AgentId;
 
@@ -33,8 +33,8 @@ impl AgentSpec {
 
     /// Identificador do agente.
     #[must_use]
-    pub const fn id(&self) -> AgentId {
-        self.id
+    pub const fn id(&self) -> &AgentId {
+        &self.id
     }
 
     /// Profundidade máxima de subagentes permitida.
@@ -56,18 +56,57 @@ impl AgentSpec {
     }
 }
 
-/// Registo de agentes disponíveis (primário sempre presente; `explorer` opcional).
+/// Registo de agentes disponíveis (primário sempre presente; `explorer` opcional;
+/// agentes **declarativos** do projecto por nome).
 #[derive(Clone, Debug)]
 pub struct AgentRegistry {
     primary: AgentSpec,
     explorer: Option<AgentSpec>,
+    named: BTreeMap<String, AgentSpec>,
 }
 
 impl AgentRegistry {
     /// Cria o registo com o agente primário e, opcionalmente, o `explorer`.
     #[must_use]
     pub fn new(primary: AgentSpec, explorer: Option<AgentSpec>) -> Self {
-        Self { primary, explorer }
+        Self {
+            primary,
+            explorer,
+            named: BTreeMap::new(),
+        }
+    }
+
+    /// Acrescenta agentes declarativos (`.agents/agents/*.md`), por nome.
+    ///
+    /// Não substitui o primário: para isso existe [`AgentRegistry::with_primary`].
+    #[must_use]
+    pub fn with_named(mut self, named: BTreeMap<String, AgentSpec>) -> Self {
+        self.named = named;
+        self
+    }
+
+    /// Substitui a especificação do agente primário (agente declarativo `primary`).
+    #[must_use]
+    pub fn with_primary(mut self, primary: AgentSpec) -> Self {
+        self.primary = primary;
+        self
+    }
+
+    /// Agentes declarativos, por ordem determinística de nome.
+    #[must_use]
+    pub fn named(&self) -> &BTreeMap<String, AgentSpec> {
+        &self.named
+    }
+
+    /// Nomes dos subagentes disponíveis (`explorer` + declarativos), por ordem.
+    #[must_use]
+    pub fn subagent_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.named.keys().cloned().collect();
+        if self.explorer.is_some() {
+            names.push(AgentId::Explorer.as_str().to_owned());
+        }
+        names.sort();
+        names
     }
 
     /// Especificação do agente primário.
@@ -84,17 +123,22 @@ impl AgentRegistry {
 
     /// Procura a especificação de um agente pelo id.
     #[must_use]
-    pub fn get(&self, id: AgentId) -> Option<&AgentSpec> {
+    pub fn get(&self, id: &AgentId) -> Option<&AgentSpec> {
         match id {
             AgentId::Primary => Some(&self.primary),
             AgentId::Explorer => self.explorer.as_ref(),
+            AgentId::Named(name) => self.named.get(name.as_ref()),
         }
     }
 
-    /// Procura a especificação de um agente pelo nome estável (`ktu`, `explorer`).
+    /// Procura a especificação de um agente pelo nome (`ktu`, `explorer` ou
+    /// declarativo).
     #[must_use]
     pub fn get_by_name(&self, name: &str) -> Option<&AgentSpec> {
-        AgentId::from_name(name).and_then(|id| self.get(id))
+        match AgentId::from_name(name) {
+            Some(id) => self.get(&id),
+            None => self.named.get(name),
+        }
     }
 }
 
@@ -123,11 +167,11 @@ mod tests {
         let explorer = AgentSpec::new(AgentId::Explorer, names(&["read_file"]), 0);
         let registry = AgentRegistry::new(primary, Some(explorer));
         assert!(registry.primary().allows("bash"));
-        assert!(registry.get(AgentId::Explorer).is_some());
+        assert!(registry.get(&AgentId::Explorer).is_some());
         assert!(registry.get_by_name("explorer").is_some());
         assert!(registry.get_by_name("desconhecido").is_none());
         assert_eq!(
-            registry.get(AgentId::Primary).map(AgentSpec::max_depth),
+            registry.get(&AgentId::Primary).map(AgentSpec::max_depth),
             Some(1)
         );
     }
@@ -136,7 +180,7 @@ mod tests {
     fn registry_without_explorer_denies_it() {
         let primary = AgentSpec::new(AgentId::Primary, names(&["read_file"]), 1);
         let registry = AgentRegistry::new(primary, None);
-        assert!(registry.get(AgentId::Explorer).is_none());
+        assert!(registry.get(&AgentId::Explorer).is_none());
         assert!(registry.get_by_name("explorer").is_none());
     }
 }

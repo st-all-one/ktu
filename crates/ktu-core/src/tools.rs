@@ -42,8 +42,16 @@ impl ToolOutcome {
 /// Porta de execução de tools.
 #[async_trait]
 pub trait ToolExecutor: Send + Sync {
-    /// Tools oferecidas ao modelo (função do `AgentSpec` em execução).
+    /// Tools **declaradas** ao modelo (função do `AgentSpec` em execução).
     fn specs(&self) -> Vec<ToolSpec>;
+
+    /// Tools **diferidas**: existem e são executáveis, mas não vão no catálogo até
+    /// o modelo as pedir por [`tool_search`](crate::tool_search).
+    ///
+    /// Por omissão, nenhuma (todo o catálogo é declarado).
+    fn deferred(&self) -> Vec<ToolSpec> {
+        Vec::new()
+    }
 
     /// Executa uma chamada. Erros viram [`ToolOutcome::error`], nunca pânico.
     async fn execute(&self, call: &ToolCall) -> ToolOutcome;
@@ -75,6 +83,14 @@ impl ToolExecutor for ScopedTools<'_> {
     fn specs(&self) -> Vec<ToolSpec> {
         self.inner
             .specs()
+            .into_iter()
+            .filter(|spec| self.allowed.contains(&spec.name))
+            .collect()
+    }
+
+    fn deferred(&self) -> Vec<ToolSpec> {
+        self.inner
+            .deferred()
             .into_iter()
             .filter(|spec| self.allowed.contains(&spec.name))
             .collect()

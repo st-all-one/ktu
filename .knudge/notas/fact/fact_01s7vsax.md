@@ -1,0 +1,10 @@
+---
+id: fact_01s7vsax
+type: fact
+statement: "Tools diferidas: deferred_tools no config, tool_search BM25 e promocao no pedido seguinte"
+created_at: 2026-10-18T03:20:36.320Z
+body_hash: e33ca531
+schema_version: 2
+anchors: [crates/ktu-core/src/tool_search.rs, crates/ktu-core/src/tools.rs, crates/ktu-core/src/agent/delegation.rs, crates/ktu-tools/src/toolbox.rs, wiki/convencoes.md]
+---
+A10 (H10, implementado a pedido do dono antes da H11). A exposicao e DADO: ToolExecutor::deferred() (default vazio, retro-compativel) + ScopedTools::deferred() que cruza a exposicao com o conjunto do agente (uma diferida fora do conjunto nunca e oferecida, nem por tool_search); Config::deferred_tools (.agents/config.toml, array TOML ou lista por virgulas, com merge local>global) + Toolbox::with_deferred(names) + wiring no turn_runtime. Novo ktu-core/src/tool_search.rs: spec() (tool_search), parse_query e rank() BM25 deterministico (k1=1.2, b=0.75, o nome pesa o dobro da descricao, idf via ln_1p, empates desfeitos pelo nome) + render() que devolve as tools encontradas com o respectivo schema e avisa que passam a estar disponiveis. O loop oferece tool_search SO quando ha diferidas (sem superficie morta) e, ao receber a chamada, promove as encontradas para o catalogo do pedido SEGUINTE registando tool.loaded por cada uma - nunca em silencio. A fachada (e o host de subagentes) acrescentam tool_search ao conjunto do agente: a exposicao e de CATALOGO, nao de permissao - o guard continua a conhecer o conjunto completo do agente. Testes: 6 unit (ranking/top_k/empates/render), ktu-core/tests/loop.rs::tool_search_promotes_a_deferred_tool_to_the_next_request (prova o gate com tool_counts == [2,3,3]: a tool aparece no pedido seguinte) e ktu-tools/tests/plan_mode.rs::deferred_tools_leave_the_catalog_but_stay_executable.

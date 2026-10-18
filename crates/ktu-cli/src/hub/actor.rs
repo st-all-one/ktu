@@ -1,8 +1,9 @@
 //! Actor de **uma** sessão: corre os turnos em sequência e publica os eventos do
 //! log. O actor é dono do `SessionLog`; ninguém mais lhe toca (I3/I8).
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
+use ktu_core::agent::Steering;
 use ktu_core::cancel::CancelToken;
 use ktu_core::domain::StopReason;
 use ktu_core::plan::{Approval, Mode};
@@ -14,6 +15,18 @@ use tokio::sync::{mpsc, oneshot};
 
 use super::{Handle, Inner};
 use crate::turn_runtime::execute_turn;
+
+/// Adaptador da fila de *steering* do [`Handle`] para a porta `Steering` do kernel.
+struct HandleSteering {
+    buffer: Arc<Mutex<Vec<String>>>,
+}
+
+impl Steering for HandleSteering {
+    fn take(&self) -> Vec<String> {
+        let mut guard = Handle::lock(&self.buffer);
+        std::mem::take(&mut *guard)
+    }
+}
 
 /// Comando dirigido a uma sessão.
 pub(crate) enum Cmd {
@@ -142,6 +155,9 @@ async fn run_turn(
     let token = CancelToken::new();
     handle.install_cancel(Some(token.clone()));
     let before = log.events().len();
+    let steering = HandleSteering {
+        buffer: handle.steering(),
+    };
     let result = execute_turn(
         &inner.root,
         log,
@@ -149,6 +165,7 @@ async fn run_turn(
         &inner.config,
         inner.logger.as_ref(),
         &token,
+        Some(&steering),
     )
     .await;
     handle.install_cancel(None);
@@ -173,6 +190,12 @@ async fn run_turn(
 fn persist(inner: &Arc<Inner>, session_id: &str, log: &SessionLog, handle: &Handle) {
     let fs = StdFs;
     let dir = inner.root.join(".ktu").join("sessions");
+    if let Err(error) = std::fs::create_dir_all(&dir) {
+        handle.send_event(ServerMsg::Error {
+            message: format!("falha ao criar {}: {error}", dir.display()),
+        });
+        return;
+    }
     if let Err(error) = store::save(&fs, &dir, session_id, log) {
         handle.send_event(ServerMsg::Error {
             message: format!("falha ao gravar a sessao: {error}"),

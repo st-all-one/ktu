@@ -6,15 +6,18 @@
 
 use std::path::{Path, PathBuf};
 
+use knudge_core::corpus::{Loaded, parse_jsonl};
 use knudge_core::graph::Graph;
 use knudge_core::retrieval::{Index, RecallQuery, recall};
 use knudge_core::store::Note;
 use knudge_core::write::{DedupDecision, DedupThresholds, propose};
 use ktu_core::memory::{Hint, Memory, MemoryDraft, MemoryError, MemoryResult, MemoryWrite};
-use ktu_core::ports::{Clock, Fs};
+use ktu_core::memory_config::Embeddings;
+use ktu_core::ports::{Clock, Embedder, Fs};
 
+use crate::ACTIVITY_WRITE;
 use crate::convert::{map_core, map_knudge, merge_into, to_knudge_draft};
-use crate::record::{decode_note, encode_note};
+use crate::embed::{self, SEMANTIC_TOP_K};
 
 /// Memória persistente em JSONL, com o motor `knudge-core` como recuperação.
 pub struct JsonlMemory<'a> {
@@ -25,6 +28,10 @@ pub struct JsonlMemory<'a> {
     /// Directório da memória (`.agents/memory`).
     memory_dir: PathBuf,
     thresholds: DedupThresholds,
+    /// Ajustes do canal semântico (H8; por omissão desligado).
+    embeddings: Embeddings,
+    /// Provedor de embeddings, quando há um (o índice derivado é opcional).
+    embedder: Option<&'a dyn Embedder>,
 }
 
 impl<'a> JsonlMemory<'a> {
@@ -42,7 +49,29 @@ impl<'a> JsonlMemory<'a> {
             project_root: project_root.into(),
             memory_dir: memory_dir.into(),
             thresholds: DedupThresholds::default(),
+            embeddings: Embeddings::default(),
+            embedder: None,
         }
+    }
+
+    /// Liga o canal semântico ao recall (índice derivado + provedor).
+    #[must_use]
+    pub fn with_embeddings(mut self, embedder: &'a dyn Embedder, config: Embeddings) -> Self {
+        self.embeddings = config;
+        self.embedder = Some(embedder);
+        self
+    }
+
+    /// Directório da memória (`.agents/memory`).
+    #[must_use]
+    pub fn memory_dir(&self) -> &Path {
+        &self.memory_dir
+    }
+
+    /// Ajustes do canal semântico em uso.
+    #[must_use]
+    pub fn embeddings(&self) -> &Embeddings {
+        &self.embeddings
     }
 
     /// Raiz do projecto.
@@ -66,17 +95,13 @@ impl<'a> JsonlMemory<'a> {
     /// Lê todas as notas, com **dedup-on-read** por `id` (a última linha vence) e
     /// saltando linhas malformadas (tolerância do contrato do `knudge`).
     ///
+    /// O parse é o do `knudge-core` ([`parse_jsonl`]) — o ktu **não** reimplementa o
+    /// codec nem a tolerância; só a porta `Fs` é a do kernel.
+    ///
     /// # Errors
     /// Propaga erros de I/O da porta.
     pub fn load_notes(&self) -> MemoryResult<Vec<Note>> {
-        let path = self.notes_path();
-        if !self.fs.exists(&path) {
-            return Ok(Vec::new());
-        }
-        let bytes = self.fs.read(&path).map_err(map_core)?;
-        let text =
-            String::from_utf8(bytes).map_err(|_| MemoryError::schema("notes.jsonl nao e UTF-8"))?;
-        Ok(load_lines(&text))
+        Ok(self.read_source()?.0)
     }
 
     /// Lê as notas e devolve também as linhas malformadas (para o `doctor`).
@@ -84,29 +109,26 @@ impl<'a> JsonlMemory<'a> {
     /// # Errors
     /// Propaga erros de I/O da porta.
     pub fn load_report(&self) -> MemoryResult<(Vec<Note>, usize)> {
+        let (notes, warnings) = self.read_source()?;
+        Ok((notes, warnings.len()))
+    }
+
+    /// Lê `notes.jsonl` pelas regras do `knudge` (dedup-on-read + skip tolerante).
+    fn read_source(&self) -> MemoryResult<Loaded> {
         let path = self.notes_path();
         if !self.fs.exists(&path) {
-            return Ok((Vec::new(), 0));
+            return Ok((Vec::new(), Vec::new()));
         }
         let bytes = self.fs.read(&path).map_err(map_core)?;
         let text =
             String::from_utf8(bytes).map_err(|_| MemoryError::schema("notes.jsonl nao e UTF-8"))?;
-        let mut notes: Vec<Note> = Vec::new();
-        let mut malformed = 0usize;
-        for line in text.lines().filter(|line| !line.trim().is_empty()) {
-            match decode_note(line) {
-                Ok(note) => upsert(&mut notes, note),
-                Err(_) => malformed = malformed.saturating_add(1),
-            }
-        }
-        notes.sort_by(|a, b| a.id().unwrap_or("").cmp(b.id().unwrap_or("")));
-        Ok((notes, malformed))
+        Ok(parse_jsonl(&text))
     }
 
     /// Memoriza um rascunho aplicando o protocolo idempotente de dedup.
     fn remember(&self, draft: &MemoryDraft) -> MemoryResult<MemoryWrite> {
         let now = self.clock.now().as_millis();
-        let knudge_draft = to_knudge_draft(draft);
+        let knudge_draft = to_knudge_draft(draft, ACTIVITY_WRITE);
         let note = knudge_draft
             .to_note(now)
             .map_err(|error| map_knudge(&error))?;
@@ -167,12 +189,28 @@ impl<'a> JsonlMemory<'a> {
         let graph = Graph::from_notes_ref(&notes).map_err(|error| map_knudge(&error))?;
         let mut request = RecallQuery::new(query);
         request.limit = limit;
+        request.vector = self.semantic_channel(query);
         let output = recall(&index, &graph, &request).map_err(|error| map_knudge(&error))?;
         Ok(output
             .hits
             .into_iter()
             .map(|hit| Hint::new(hit.id, hit.statement, hit.score))
             .collect())
+    }
+
+    /// Canal semântico do recall: ids do índice derivado mais próximos da consulta.
+    ///
+    /// Degradação graciosa: sem provedor, sem índice ou com o provedor fora, devolve
+    /// `None` e o recall fica lexical — **sem aviso**.
+    fn semantic_channel(&self, query: &str) -> Option<Vec<String>> {
+        let embedder = self.embedder?;
+        if !self.embeddings.enabled() {
+            return None;
+        }
+        let expected = embed::engine_meta(&self.embeddings).ok()?;
+        let index = embed::load(self.fs, &self.memory_dir, &expected).ok()??;
+        let ids = embed::semantic_ids(&index, embedder, query, SEMANTIC_TOP_K).ok()?;
+        (!ids.is_empty()).then_some(ids)
     }
 
     /// Acrescenta uma nota ao JSONL de forma durável (`temp → fsync → rename`).
@@ -184,7 +222,7 @@ impl<'a> JsonlMemory<'a> {
         } else {
             String::new()
         };
-        text.push_str(&encode_note(note)?);
+        text.push_str(&note.to_jsonl().map_err(|error| map_knudge(&error))?);
         text.push('\n');
         let temp = path.with_extension("jsonl.tmp");
         self.fs.write(&temp, text.as_bytes()).map_err(map_core)?;
@@ -202,27 +240,4 @@ impl Memory for JsonlMemory<'_> {
     fn write(&self, draft: &MemoryDraft) -> MemoryResult<MemoryWrite> {
         self.remember(draft)
     }
-}
-
-/// Carrega notas de um texto JSONL com dedup-on-read (última linha vence).
-fn load_lines(text: &str) -> Vec<Note> {
-    let mut notes: Vec<Note> = Vec::new();
-    for line in text.lines().filter(|line| !line.trim().is_empty()) {
-        if let Ok(note) = decode_note(line) {
-            upsert(&mut notes, note);
-        }
-    }
-    notes.sort_by(|a, b| a.id().unwrap_or("").cmp(b.id().unwrap_or("")));
-    notes
-}
-
-/// Insere uma nota substituindo a de mesmo `id` (última versão vence).
-fn upsert(notes: &mut Vec<Note>, note: Note) {
-    if let Ok(id) = note.id()
-        && let Some(slot) = notes.iter_mut().find(|item| item.id().ok() == Some(id))
-    {
-        *slot = note;
-        return;
-    }
-    notes.push(note);
 }

@@ -1,6 +1,8 @@
 # AGENTS.md aninhados (descoberta de instruções)
 
-- **Estado:** candidata (do `opencode`) — **incorporar**.
+- **Estado:** **incorporada** (H10) — descoberta determinística no arranque (raiz primeiro,
+  aninhados com cabeçalho, tectos) **e** injecção do `AGENTS.md` mais próximo na **leitura de um
+  ficheiro** (porta `Instructions`, evento `context.local`), uma vez por turno e por fonte.
 - **Origem:** `REF/opencode/packages/core/src/instruction-discovery.ts`,
   `.opencode/command/learn.md`; `wiki/revisao-opencode.md` §2.2.
 - **Âncora:** `crates/ktu-core/src/prompt.rs`, `crates/ktu-core/src/layout.rs`.

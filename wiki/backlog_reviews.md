@@ -3,6 +3,10 @@
 > Revisão crítica das **123 propostas** do [backlog](./backlog/README.md), com um único filtro:
 > **isto torna o ktu um agente realmente útil *sem* deixar de ser mínimo?** Não é um índice: é um
 > **tribunal**. Data: 2026-10-17.
+>
+> **Segunda passagem:** [revisão por propósito](./revisao-proposito.md) — re-tria pelas **4
+> utilizações** (crate · pipeline · conversa longa · config do projecto) e pelos invariantes
+> M1–M6. **Duplicatas fundidas:** [`backlog/consolidado.md`](./backlog/consolidado.md) (36 → 15).
 
 ---
 

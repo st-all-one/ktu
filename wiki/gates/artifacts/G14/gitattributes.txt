@@ -1,0 +1,13 @@
+# ktu:start
+# Memória: LF mantém os ids estáveis; o log de eventos é append-only (union é seguro).
+/.agents/memory/notes.jsonl text eol=lf
+/.agents/memory/events/*.jsonl text eol=lf merge=union
+
+# Conhecimento legível (skills, guardrails): texto normalizado.
+/.agents/skills/** text eol=lf
+/.agents/guardrails/** text eol=lf
+
+# Derivado e runtime (reconstruíveis, nunca versionados): sem diff/merge automático.
+/.agents/memory/index/** binary linguist-generated
+/.ktu/** binary linguist-generated
+# ktu:end

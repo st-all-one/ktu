@@ -1,6 +1,6 @@
 # Continuação de leitura truncada
 
-- **Estado:** candidata (do `katu`) — **incorporar**.
+- **Estado:** **implementado** (H5; `wiki/implementation_phase2/H5-fiabilidade-loop.md`).
 - **Origem:** `REF/katu/wiki/crates/DOSSIE_PENDENCIAS.md` §4; `wiki/revisao-katu.md` §3.12.
 - **Âncora:** `crates/ktu-tools/src/fs_tools.rs`.
 

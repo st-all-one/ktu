@@ -1,0 +1,10 @@
+---
+id: decision_01noh28j
+type: decision
+statement: "H10: adiar receitas ricas (A9), exposicao de tools + tool_search (A10) e AGENTS.md na leitura (A11)"
+created_at: 2026-10-18T02:59:13.792Z
+body_hash: 7758ea8a
+schema_version: 2
+anchors: [wiki/implementation_phase2/ADIADOS.md, wiki/implementation_phase2/H10-convencoes.md, wiki/convencoes.md]
+---
+Decisao tomada ao fechar a H10 (convencoes), com o dono do projecto informado. (1) A9 - receitas com settings/parameters/sub_recipes e shell embutido: o MECANISMO de templates esta feito e provado (.agents/commands/*.md, /nome args, $ARGUMENTS, ktu commands ls); o que falta e a camada de settings (exigiria schema versionado - A2) e o shell embutido, que DUPLICARIA a tool bash (ja guardada por Guard::evaluate) com um segundo caminho de execucao no arranque do prompt. Reabrir com >=2 workflows repetidos que precisem de settings proprios ou um pedido concreto de ktu run --recipe. (2) A10 - exposicao declared/deferred + tool_search BM25: a pre-condicao do backlog ("catalogo que cresca alem do que cabe confortavelmente no prompt") NAO esta satisfeita - o ktu declara 13 tools - e o mecanismo obrigaria a alargar ToolSpec em ~29 sitios para um ganho sem sintoma. Distinto do A4 rejeitado do katu (roteamento semantico), mas a justificacao de valor e a mesma: nao declarar so compensa com catalogo grande. Reabrir com medicao (tokens do catalogo por pedido) ou um conjunto de tools opcionais que polua a escolha do modelo. (3) A11 - AGENTS.md mais proximo injectado na LEITURA de um ficheiro: exigiria um gancho no caminho das tools (o kernel enriqueceria o resultado da leitura) e o orcamento passaria a depender da sequencia de leituras; a composicao no arranque com tectos de bytes ja da as instrucoes locais e a resolucao nearest() ja existe (pura e testada) para quando o gancho for feito. Reabrir com sintoma de orcamento em monorepos ou de instrucoes locais a atrapalhar tarefas fora do seu directorio. Os tres estao em wiki/implementation_phase2/ADIADOS.md (A9/A10/A11) com condicao de reabertura e tarefa kd propria (task_00mtxl9i, task_01moxmoz, task_01963li2).

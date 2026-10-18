@@ -293,7 +293,7 @@ que **não** é fonte.
 | **Tarefas com hierarquia fechada** | `epic ⊃ {issue ⊃ task \| task}`; fechar exige **evidência** (`--outcome/--note`) |
 | **Ciclo de vida / confiança** | posterior Beta, factor de idade, penalidade por contradição, confiança derivada de tarefas |
 | **Portas** | `Clock`, `Rng`, `Env`, `Fs`, `Git`, **`HookRunner`**, `Logger` — o domínio não toca SO; adaptadores isolados |
-| **Disciplina de código** | ≤300 linhas/ficheiro, sem `unwrap`/`expect`/`panic`/`unsafe`, iteração determinística (`BTreeMap`/`IndexMap`) |
+| **Disciplina de código** | ≤400 linhas/ficheiro, sem `unwrap`/`expect`/`panic`/`unsafe`, iteração determinística (`BTreeMap`/`IndexMap`) |
 | **Gatilhos (vindos do MCP do knudge)** | `pre_write`, `pre_edit`, `session_end`, `status` — e os *hints* são **ponteiros** (`id + statement + score`), **nunca o corpo** |
 
 **Adaptação ao ktu (onde não copiamos):**
@@ -716,6 +716,15 @@ token, memória), só então discutir optimização profunda.
 
 Determinismo: `Clock`/`Rng`/`Fs` são **portas** com fakes nos testes (herdado da disciplina do
 knudge/katu); zero `unwrap/expect/panic` em `src/`.
+
+### 4.1 Medição (adoptar-ou-reverter)
+
+Um número sem artefacto não fundamenta decisão. Todo o item de optimização exige **fórmula +
+artefacto + teste que o trava**, com a **base de evidência** declarada (`measured`/`inferred`/
+`provider_reported`/`unpriced`); o veredicto é **A/B** e a regra é **adoptar-ou-reverter**:
+≥ 20 % no alvo **ou** remoção de complexidade; senão reverter e **escrever a rejeição com o
+número**. O método completo está em [`wiki/metodo-medicao.md`](wiki/metodo-medicao.md) e as
+rejeições com número em [`wiki/pendencias.md`](wiki/pendencias.md) §3.
 
 ---
 

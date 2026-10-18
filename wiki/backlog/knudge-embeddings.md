@@ -1,6 +1,9 @@
 # knudge — porta `Embedder` (canal semântico)
 
-- **Estado:** candidata (do `knudge` 0.6.1) — **avaliar**.
+- **Estado:** **implementada** (H8) — porta `Embedder` síncrona em `ktu-core`, `HttpEmbedder`
+  (bloqueante) em `ktu-provider`, `FakeEmbedder` determinístico e canal vetorial na fusão RRF;
+  contrato em [memoria-semantica](../memoria-semantica.md). O worker ficou em
+  [memory-drain-service](./memory-drain-service.md).
 - **Origem:** `crates/knudge/wiki/integration/10_embeddings.md`,
   `crates/knudge/wiki/specs/embeddings.md`; `wiki/revisao-knudge.md` §6.2.
 - **Âncora:** `crates/ktu-core/src/ports/`, `crates/ktu-memory/src/store.rs`.
@@ -32,3 +35,8 @@ Sem embeddings; recall lexical.
 ## Decisão pendente
 Avaliar. Se entrar, **porta `Embedder` + `FakeEmbedder`** (determinístico, como as outras portas);
 o provedor HTTP atrás de config; `drain` off-path; trocar de modelo invalida o índice.
+
+> **Actualização (2026-10-17):** o **worker/serviço** (`drain service --install`) deixou de ficar de
+> fora — passa a **opcional e incentivado** em [memory-drain-service](./memory-drain-service.md)
+> (a pedido do dono; o ganho de recall é expressivo). Esta página continua a ser a **porta**
+> `Embedder`; a página nova trata do **serviço**.

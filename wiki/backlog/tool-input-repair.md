@@ -1,6 +1,6 @@
 # Reparação de input de tool
 
-- **Estado:** candidata (do `opencode`) — **incorporar** (consolida com [67](./tool-calls-declaradas.md)).
+- **Estado:** **implementado** (H5; `wiki/implementation_phase2/H5-fiabilidade-loop.md`).
 - **Origem:** `REF/opencode/packages/core/src/plugin/tool-input-repair.ts`;
   `wiki/revisao-opencode-profunda.md` §1.5.
 - **Âncora:** `crates/ktu-core/src/agent/mod.rs`, `crates/ktu-provider/src/wire.rs`.

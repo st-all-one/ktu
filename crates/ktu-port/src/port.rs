@@ -37,6 +37,12 @@ pub trait Port: Send + Sync {
     /// Devolve [`PortError`] se a sessão não existir ou o transporte falhar.
     async fn cancel(&self, session_id: &str) -> Result<(), PortError>;
 
+    /// Entrega uma mensagem de *steering* ao turno em curso (fronteira segura).
+    ///
+    /// # Errors
+    /// Devolve [`PortError`] se a sessão não existir ou o transporte falhar.
+    async fn steer(&self, session_id: &str, text: &str) -> Result<(), PortError>;
+
     /// Muda o modo da sessão (`approval` liberta `plan→build` — I15).
     ///
     /// # Errors

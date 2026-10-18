@@ -37,12 +37,13 @@ impl Logger for TracingLogger {
     }
 }
 
-/// Configura o subscritor global (JSON em `stderr`, nível por `RUST_LOG`,
-/// por omissão `info`) e devolve o logger da borda.
+/// Configura o subscritor global (JSON em `stderr`) e devolve o logger da borda.
+///
+/// `level` é o nível por omissão quando `RUST_LOG` não está definido
+/// (`error|warn|info|debug|trace|off`); `off` desliga os logs (`--quiet`).
 #[must_use]
-pub(crate) fn init() -> TracingLogger {
-    let filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_ignored| EnvFilter::new("info"));
+pub(crate) fn init(level: &str) -> TracingLogger {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_ignored| EnvFilter::new(level));
     let subscriber = fmt()
         .json()
         .with_env_filter(filter)

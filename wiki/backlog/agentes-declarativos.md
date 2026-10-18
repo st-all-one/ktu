@@ -1,6 +1,8 @@
 # Agentes declarativos
 
-- **Estado:** candidata (do `opencode`) — **incorporar**.
+- **Estado:** **incorporada** (H10) — `.agents/agents/*.md` (`name`, `mode`, `tools` allow/deny),
+  fail-closed, integrado no `AgentRegistry` e no *enforcement* estrutural; a tool `subagent`
+  enumera os nomes. `model`/`hidden`/`color` ficam adiados.
 - **Origem:** `REF/opencode/.opencode/agent/*.md`; `wiki/revisao-opencode.md` §2.1.
 - **Âncora:** `crates/ktu-core/src/agent/spec.rs`, `crates/ktu-core/src/subagent.rs`.
 

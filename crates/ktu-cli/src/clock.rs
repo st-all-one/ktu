@@ -1,7 +1,7 @@
 //! Adaptador real da porta `Clock` (borda).
 //!
 //! Aqui — e só aqui — se lê o relógio real do SO; o domínio recebe apenas
-//! [`Timestamp`](ktu_core::ports::Timestamp) e microssegundos monótonos.
+//! [`ktu_core::ports::Timestamp`] e microssegundos monótonos.
 
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
