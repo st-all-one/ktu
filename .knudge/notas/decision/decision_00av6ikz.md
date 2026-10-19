@@ -1,0 +1,10 @@
+---
+id: decision_00av6ikz
+type: decision
+statement: ktu init nao escreve no AGENTS.md: o protocolo vive em ktu prime e na base do prompt (ADR 0021)
+created_at: 2026-10-19T07:06:16.995Z
+body_hash: b9df6399
+schema_version: 2
+anchors: [crates/ktu-cli/src/init.rs, crates/ktu-core/src/prompt.rs, wiki/adr/0021-o-init-nao-escreve-no-agents-md.md]
+---
+Decisao (ADR 0021). O `ktu init` deixa de escrever o bloco gerido no AGENTS.md. Motivo: o AGENTS.md e uma **camada do system prompt** (entra em todos os turnos) e o bloco era um subconjunto do `prompt::BASE` (disciplina de memoria identica) e do `ktu prime` (CICLO e CONVENCOES identicos) - custo permanente, informacao nenhuma; e o AGENTS.md e o ficheiro de instrucoes DO PROJECTO, escrito pelo humano, nao um sitio onde a ferramenta se anuncia. Alternativas descartadas: (a) manter o bloco - duplica BASE+prime dentro do prompt de cada turno; (b) mover o bloco para .agents/SYSTEM.md - seria escrever na directriz do humano (que SUBSTITUI a base) para repetir o que BASE/prime ja tem, e o ktu passaria a gerar um prompt de sistema; (c) manter o bloco mas exclui-lo do prompt - o AGENTS.md e lido por desenho (instrucoes do projecto, aninhadas e injectadas na leitura), filtrar blocos por marcador seria complexidade para preservar uma copia inutil; (d) doctor que so avisa quando o bloco existe - codigo para um caso que deixa de existir; (e) manter version_in para o futuro - sem consumidor, porque o protocolo e servido pelo binario (ktu prime); (f) o init remover um bloco antigo - o ktu nao escreve no AGENTS.md (projectos initados antes guardam o bloco ate o humano apagar; pre-1.0, sem migracao). Corrige uma decisao anterior: o fecho do F6 usou o argumento "o init ja escreve o bloco no AGENTS.md que os clientes leem" - cai com esta ADR, e o fecho mantem-se pelos restantes (sem MCP, sem consumidor, gatilho nao disparado); o gatilho de D3 passa a ser "um cliente concreto que precise de configuracao propria".

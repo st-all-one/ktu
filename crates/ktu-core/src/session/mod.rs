@@ -4,6 +4,8 @@
 //! é a única fonte do pedido ao provider. Cada linha é um [`Event`] serializável
 //! (a persistência em JSONL é feita pela borda, via a porta `Fs`).
 
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
 use crate::compact::summarize;
@@ -23,8 +25,21 @@ pub enum Event {
         /// Instrução do utilizador.
         prompt: String,
     },
-    /// *Steering*: mensagem do utilizador durante o turno (fronteira segura).
+    /// *Steering*: mensagem **admitida** (durável no log), ainda não entregue ao modelo.
+    ///
+    /// A admissão é o primeiro evento; a entrega ([`Event::Steer`]) referencia o **mesmo**
+    /// `id` — uma mensagem admitida e não entregue sobrevive a um *crash* e é entregue no
+    /// turno seguinte (M7).
+    SteerQueued {
+        /// Identificador dado pela **borda** (idempotência: o mesmo id entrega uma vez).
+        id: String,
+        /// Texto admitido.
+        text: String,
+    },
+    /// *Steering*: mensagem **entregue** ao modelo (fronteira segura).
     Steer {
+        /// Identificador da admissão correspondente.
+        id: String,
         /// Texto entregue ao modelo.
         text: String,
     },
@@ -78,6 +93,15 @@ pub enum Event {
         /// Motivo da negação, se houver.
         reason: Option<String>,
     },
+}
+
+/// Mensagem de *steering*: `id` (dado pela borda) + texto.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SteerMessage {
+    /// Identificador da admissão (idempotência).
+    pub id: String,
+    /// Texto da mensagem.
+    pub text: String,
 }
 
 /// Violação das invariantes do log detectada por [`SessionLog::verify`].
@@ -154,23 +178,84 @@ impl SessionLog {
     ///
     /// O system prompt é composto **à parte** pelo provider; aqui ficam só as
     /// mensagens do diálogo. Um passo = **uma** `Assistant` com N `tool_calls`,
-    /// seguida de N `Tool`.
+    /// seguida de N `Tool`. Uma mensagem de *steering* entra **uma só vez**, mesmo
+    /// que o `id` apareça em mais do que um `Steer` (idempotência — M7).
     #[must_use]
     pub fn derive_messages(&self) -> Vec<Message> {
         let mut messages = Vec::new();
         let from = self.compaction_from.unwrap_or(0).min(self.events.len());
+        // Ids entregues **antes do corte**: o resumo já os menciona, a projecção não os repete.
+        let summarized: BTreeSet<&str> = self
+            .events
+            .get(..from)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|event| match event {
+                Event::Steer { id, .. } => Some(id.as_str()),
+                _ => None,
+            })
+            .collect();
         if from > 0 {
             let summary = summarize(self.events.get(..from).unwrap_or_default());
             if !summary.is_empty() {
                 messages.push(Message::User { content: summary });
             }
         }
+        let mut seen: BTreeSet<&str> = BTreeSet::new();
         for event in self.events.get(from..).unwrap_or_default() {
+            // Já mencionada pelo resumo, ou repetida: entra **uma só vez**.
+            if let Event::Steer { id, .. } = event
+                && (summarized.contains(id.as_str()) || !seen.insert(id.as_str()))
+            {
+                continue;
+            }
             if let Some(message) = project(event) {
                 messages.push(message);
             }
         }
         messages
+    }
+
+    /// Ids de *steering* já **entregues** (aparecem num `Event::Steer`).
+    fn delivered_steers(&self) -> BTreeSet<&str> {
+        self.events
+            .iter()
+            .filter_map(|event| match event {
+                Event::Steer { id, .. } => Some(id.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Mensagens admitidas e **ainda não entregues**, por ordem de admissão e sem
+    /// repetir o `id` (é o que o turno seguinte entrega — M7).
+    #[must_use]
+    pub fn pending_steers(&self) -> Vec<SteerMessage> {
+        let delivered = self.delivered_steers();
+        let mut seen: BTreeSet<&str> = BTreeSet::new();
+        let mut pending = Vec::new();
+        for event in &self.events {
+            if let Event::SteerQueued { id, text } = event
+                && !delivered.contains(id.as_str())
+                && seen.insert(id.as_str())
+            {
+                pending.push(SteerMessage {
+                    id: id.clone(),
+                    text: text.clone(),
+                });
+            }
+        }
+        pending
+    }
+
+    /// `true` se o `id` já foi admitido (entregue ou pendente) — a borda pode repetir
+    /// o pedido sem duplicar a mensagem (M7).
+    #[must_use]
+    pub fn knows_steer(&self, id: &str) -> bool {
+        self.events.iter().any(|event| match event {
+            Event::SteerQueued { id: queued, .. } | Event::Steer { id: queued, .. } => queued == id,
+            _ => false,
+        })
     }
 
     /// Verifica as invariantes I1 (nenhum turno aberto) e I2 (todo `ToolCall`
@@ -197,6 +282,7 @@ impl SessionLog {
                 Event::GuardDecision { .. }
                 | Event::ModeSet { .. }
                 | Event::PluginDispatch { .. }
+                | Event::SteerQueued { .. }
                 | Event::Steer { .. } => {}
             }
         }
@@ -216,7 +302,7 @@ fn project(event: &Event) -> Option<Message> {
         Event::TurnStart { prompt } => Some(Message::User {
             content: prompt.clone(),
         }),
-        Event::Steer { text } => Some(Message::User {
+        Event::Steer { text, .. } => Some(Message::User {
             content: text.clone(),
         }),
         Event::Assistant {
@@ -241,7 +327,8 @@ fn project(event: &Event) -> Option<Message> {
         Event::GuardDecision { .. }
         | Event::TurnEnd { .. }
         | Event::ModeSet { .. }
-        | Event::PluginDispatch { .. } => None,
+        | Event::PluginDispatch { .. }
+        | Event::SteerQueued { .. } => None,
     }
 }
 

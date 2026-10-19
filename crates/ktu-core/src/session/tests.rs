@@ -107,3 +107,86 @@ fn wire_projection_is_deterministic_and_prefix_stable() {
     // O pensamento nunca é reenviado ao modelo.
     assert_eq!(before.len(), 2);
 }
+
+/// Uma mensagem admitida e não entregue fica **pendente** — é o que o turno seguinte entrega.
+#[test]
+fn a_queued_steer_is_pending_until_delivered() {
+    let mut log = SessionLog::new();
+    log.push(Event::TurnStart {
+        prompt: "faz".to_owned(),
+    });
+    log.push(Event::SteerQueued {
+        id: "s1".to_owned(),
+        text: "antes isto".to_owned(),
+    });
+    log.push(Event::TurnEnd {
+        reason: StopReason::EndTurn,
+    });
+    assert_eq!(log.pending_steers().len(), 1);
+    assert!(log.knows_steer("s1"));
+    // A admissão **não** entra no contexto: só a entrega projeta (model-visible ⟺ logged).
+    let messages = log.derive_messages();
+    assert!(
+        !messages
+            .iter()
+            .any(|message| matches!(message, Message::User { content } if content == "antes isto"))
+    );
+
+    log.push(Event::Steer {
+        id: "s1".to_owned(),
+        text: "antes isto".to_owned(),
+    });
+    assert_eq!(log.pending_steers(), Vec::new());
+    let messages = log.derive_messages();
+    assert_eq!(
+        messages
+            .iter()
+            .filter(
+                |message| matches!(message, Message::User { content } if content == "antes isto")
+            )
+            .count(),
+        1
+    );
+}
+
+/// O mesmo `id` entregue duas vezes (retry do front, retomada) entra **uma só vez** no contexto.
+#[test]
+fn a_repeated_steer_id_is_projected_once() {
+    let mut log = SessionLog::new();
+    log.push(Event::TurnStart {
+        prompt: "faz".to_owned(),
+    });
+    for _ in 0..2 {
+        log.push(Event::Steer {
+            id: "s1".to_owned(),
+            text: "antes isto".to_owned(),
+        });
+    }
+    log.push(Event::Steer {
+        id: "s2".to_owned(),
+        text: "antes isto".to_owned(),
+    });
+    log.push(Event::TurnEnd {
+        reason: StopReason::EndTurn,
+    });
+    let count = log
+        .derive_messages()
+        .iter()
+        .filter(|message| matches!(message, Message::User { content } if content == "antes isto"))
+        .count();
+    assert_eq!(count, 2, "mesmo id uma vez; ids distintos duas");
+    assert_eq!(log.verify(), Vec::new());
+}
+
+/// A admissão repetida (mesmo id) não fica pendente duas vezes.
+#[test]
+fn a_repeated_queued_steer_id_is_pending_once() {
+    let mut log = SessionLog::new();
+    for _ in 0..3 {
+        log.push(Event::SteerQueued {
+            id: "s1".to_owned(),
+            text: "antes isto".to_owned(),
+        });
+    }
+    assert_eq!(log.pending_steers().len(), 1);
+}

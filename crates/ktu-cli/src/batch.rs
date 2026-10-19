@@ -9,6 +9,9 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+use ktu_tools::FileMutationQueue;
+use std::sync::Arc;
 use std::sync::{Mutex, PoisonError};
 
 use ktu_core::ports::Logger;
@@ -50,10 +53,13 @@ pub(crate) fn run(
     if items.is_empty() {
         return ExitCode::SUCCESS;
     }
+    // **Uma** fila por processo: os workers do modo paralelo partilham-na, pelo que
+    // duas entradas a editar o mesmo ficheiro não perdem alterações (F4).
+    let mutations = Arc::new(FileMutationQueue::new());
     let ok = if options.sequential {
-        run_sequential(root, logger, base, &items)
+        run_sequential(root, logger, base, &items, &mutations)
     } else {
-        run_parallel(root, logger, base, &items, options.concurrency)
+        run_parallel(root, logger, base, &items, options.concurrency, &mutations)
     };
     if ok {
         ExitCode::SUCCESS
@@ -119,7 +125,13 @@ fn turn_config(base: &RunConfig, item: &RunParams, session: &str, mode: SessionM
 }
 
 /// Corre os itens em ordem, na **mesma sessão**.
-fn run_sequential(root: &Path, logger: &dyn Logger, base: &RunConfig, items: &[RunParams]) -> bool {
+fn run_sequential(
+    root: &Path,
+    logger: &dyn Logger,
+    base: &RunConfig,
+    items: &[RunParams],
+    mutations: &Arc<FileMutationQueue>,
+) -> bool {
     let mut ok = true;
     for (index, item) in items.iter().enumerate() {
         // O 1.º item usa o modo pedido; os seguintes **retomam** (contexto acumula).
@@ -130,7 +142,7 @@ fn run_sequential(root: &Path, logger: &dyn Logger, base: &RunConfig, items: &[R
         };
         let config = turn_config(base, item, base.session.id().unwrap_or("batch"), mode);
         let prompt = item.prompt.clone().unwrap_or_default();
-        let (success, text) = run::run_capture(root, &prompt, logger, &config);
+        let (success, text) = run::run_capture(root, &prompt, logger, &config, mutations);
         print_result(index, text.as_deref());
         ok = ok && success;
     }
@@ -138,12 +150,17 @@ fn run_sequential(root: &Path, logger: &dyn Logger, base: &RunConfig, items: &[R
 }
 
 /// Corre os itens em paralelo, cada um numa sessão própria (`batch-<i>`).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "composicao explicita do lote; uma fila partilhada + o contexto do turno"
+)]
 fn run_parallel(
     root: &Path,
     logger: &dyn Logger,
     base: &RunConfig,
     items: &[RunParams],
     concurrency: usize,
+    mutations: &Arc<FileMutationQueue>,
 ) -> bool {
     let total = items.len();
     let results: Results = Mutex::new((0..total).map(|_| None).collect());
@@ -159,7 +176,8 @@ fn run_parallel(
                     };
                     let config = turn_config(base, item, &format!("batch-{index}"), base.mode);
                     let prompt = item.prompt.clone().unwrap_or_default();
-                    let (success, text) = run::run_capture(root, &prompt, logger, &config);
+                    let (success, text) =
+                        run::run_capture(root, &prompt, logger, &config, mutations);
                     let mut guard = results.lock().unwrap_or_else(PoisonError::into_inner);
                     if let Some(slot) = guard.get_mut(index) {
                         *slot = Some((success, text));

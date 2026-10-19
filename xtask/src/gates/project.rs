@@ -23,7 +23,7 @@ pub(crate) fn g14(ctx: &Ctx) -> Result<Gate, String> {
         first.status.success(),
         first.status.to_string(),
     );
-    let managed = [".git/info/exclude", ".gitattributes", "AGENTS.md"];
+    let managed = [".git/info/exclude", ".gitattributes"];
     let before: Vec<String> = managed
         .iter()
         .map(|path| read(&dir.join(path)).map(|text| hash(&text)))
@@ -172,9 +172,47 @@ pub(crate) fn g14(ctx: &Ctx) -> Result<Gate, String> {
                 .unwrap_or_default()
         ),
     );
+    // Diagnostico: o `doctor` do projecto le o marcador de versao do bloco de
+    // protocolo (que ate agora era escrito e nunca lido) e aponta as outras portas.
+    let healthy = ctx.ktu_ok(&dir, &["doctor", "--json"], "")?;
+    gate.check(
+        "o doctor do projecto esta em dia depois do init",
+        healthy.contains("\"healthy\":true")
+            && healthy.contains("ktu memory doctor")
+            && healthy.contains("\"name\":\"config\""),
+        format!("healthy={}", healthy.contains("\"healthy\":true")),
+    );
+    // O init nao gera conteudo sobre o ktu: nem skill `ktu`, nem bloco no AGENTS.md.
+    let skill = dir.join(".agents/skills/ktu/SKILL.md");
+    gate.check(
+        "o init nao gera a skill do ktu (as convencoes vivem na base do prompt)",
+        !skill.exists(),
+        format!("{} existe: {}", skill.display(), skill.exists()),
+    );
+    // O `AGENTS.md` e do projecto: o `ktu init` nao escreve nele (ADR 0021).
+    let human = "# AGENTS\n\nRegras humanas.\n";
+    write(&dir.join("AGENTS.md"), human)?;
+    let after = ctx.ktu(&dir, &["init"], "")?;
+    gate.check(
+        "o init nao toca no AGENTS.md do projecto",
+        after.status.success() && read(&dir.join("AGENTS.md"))? == human,
+        format!("intacto: {}", read(&dir.join("AGENTS.md"))? == human),
+    );
+    let memory = ctx.ktu_ok(&dir, &["memory", "doctor", "--json"], "")?;
+    gate.check(
+        "o diagnostico da memoria tem porta propria",
+        memory.contains("\"command\":\"memory doctor\"") && memory.contains("\"healthy\":true"),
+        format!(
+            "command=memory doctor: {}",
+            memory.contains("memory doctor")
+        ),
+    );
+
     gate.artifact("exclude.txt", exclude);
     gate.artifact("gitattributes.txt", attributes);
     gate.artifact("m5.jsonl", log);
+    gate.artifact("doctor.json", healthy);
+    gate.artifact("memory-doctor.json", memory);
     Ok(gate)
 }
 

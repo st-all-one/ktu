@@ -13,7 +13,7 @@ agent: opencode
 
 # OPENCODE_EPIC — Reimplementação do `knudge` em TypeScript
 
-> **Base:** [`OPENCODE_RESEARCH.md`](./OPENCODE_RESEARCH.md) (análise técnica do `knudge` v0.5.2 em
+> **Base:** `OPENCODE_RESEARCH.md` (não versionado) (análise técnica do `knudge` v0.5.2 em
 > Rust). **Objetivo deste épico:** especificar uma **reimplementação fiel em TypeScript/Node.js**,
 > com paridade de contrato byte-a-byte, plano mestre por fases e uma cadeia sequencial de issues.
 >
@@ -601,7 +601,7 @@ explícitas de paralelismo: TS-010/TS-011/TS-012 (independentes entre si após T
 
 ## 10. Referências
 
-- Análise base: [`OPENCODE_RESEARCH.md`](./OPENCODE_RESEARCH.md).
+- Análise base: `OPENCODE_RESEARCH.md` (não versionado).
 - Contrato de bytes: `REF/knudge/wiki/specs/TOON.md`.
 - Arquitetura: `REF/knudge/wiki/specs/ARCHITECTURE.md`.
 - Bordas/determinismo: `REF/knudge/wiki/specs/DIVERGENCES.md`.

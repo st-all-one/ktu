@@ -13,6 +13,7 @@ use serde_json::Value;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
+use crate::mutation::FileMutationQueue;
 use crate::path::{resolve_existing, resolve_for_write};
 use crate::search;
 use crate::text::{Document, Edit, apply_edits, to_lf};
@@ -26,16 +27,24 @@ pub struct FsTools<'a> {
     root: PathBuf,
     fs: &'a dyn Fs,
     max_bytes: usize,
+    /// Fila de mutação por caminho (F4): duas escritas ao mesmo ficheiro não se
+    /// sobrepõem; a caminhos distintos correm em paralelo.
+    ///
+    /// É **injectada**: o mesmo processo partilha uma fila entre sessões (o `serve`
+    /// corre um actor por sessão, o `--batch --parallel` uma thread por worker) —
+    /// uma fila por turno nao serializaria nada entre sessoes.
+    queue: &'a FileMutationQueue,
 }
 
 impl<'a> FsTools<'a> {
-    /// Cria o conjunto com o *root* e a porta de ficheiros.
+    /// Cria o conjunto com o *root*, a porta de ficheiros e a fila de mutação.
     #[must_use]
-    pub fn new(root: impl Into<PathBuf>, fs: &'a dyn Fs) -> Self {
+    pub fn new(root: impl Into<PathBuf>, fs: &'a dyn Fs, queue: &'a FileMutationQueue) -> Self {
         Self {
             root: root.into(),
             fs,
             max_bytes: DEFAULT_MAX_BYTES,
+            queue,
         }
     }
 
@@ -78,7 +87,7 @@ impl<'a> FsTools<'a> {
         ToolOutcome::ok(wrap_untrusted("read_file", &body))
     }
 
-    fn write(&self, args: &Value) -> ToolOutcome {
+    async fn write(&self, args: &Value) -> ToolOutcome {
         let requested = args.get("path").and_then(Value::as_str);
         let content = args.get("content").and_then(Value::as_str);
         let (Some(requested), Some(content)) = (requested, content) else {
@@ -88,6 +97,7 @@ impl<'a> FsTools<'a> {
             Ok(path) => path,
             Err(message) => return ToolOutcome::error(message),
         };
+        let _turn = self.queue.acquire(&path).await;
         match self.fs.write(&path, content.as_bytes()) {
             Ok(()) => ToolOutcome::ok(format!("escrito {requested} ({} bytes)", content.len())),
             Err(error) => {
@@ -96,7 +106,7 @@ impl<'a> FsTools<'a> {
         }
     }
 
-    fn edit(&self, args: &Value) -> ToolOutcome {
+    async fn edit(&self, args: &Value) -> ToolOutcome {
         let Some(requested) = args.get("path").and_then(Value::as_str) else {
             return ToolOutcome::error("argumento 'path' em falta");
         };
@@ -108,6 +118,9 @@ impl<'a> FsTools<'a> {
             Ok(path) => path,
             Err(message) => return ToolOutcome::error(message),
         };
+        // A vez é pedida **antes** da leitura: ler-fora/gravar-dentro perdia a
+        // alteração de outra edição ao mesmo ficheiro.
+        let _turn = self.queue.acquire(&path).await;
         let Ok(bytes) = self.fs.read(&path) else {
             return ToolOutcome::error(format!("read.missing: {requested}"));
         };
@@ -266,8 +279,8 @@ impl ToolExecutor for FsTools<'_> {
         let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
         match call.name.as_str() {
             "read_file" => self.read(&args),
-            "write_file" => self.write(&args),
-            "edit_file" => self.edit(&args),
+            "write_file" => self.write(&args).await,
+            "edit_file" => self.edit(&args).await,
             "list_dir" => self.list(&args),
             "glob" => self.glob(&args),
             "grep" => self.grep(&args),

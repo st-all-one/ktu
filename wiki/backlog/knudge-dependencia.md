@@ -1,6 +1,7 @@
 # knudge — como consumir o `knudge-core` (dependência)
 
-- **Estado:** candidata (do `knudge` 0.6.1) — **decidir**.
+- **Estado:** candidata (do `knudge` 0.6.1) — **decidir**. O portão do knudge já corre na CI
+  (`make check-knudge`, F7/gate G22); o que falta decidir é a via de **consumo** reprodutível.
 - **Origem:** `crates/knudge` (checkout local) · D214 (`knudge-core` publicável);
   `wiki/revisao-knudge.md` §5.
 - **Âncora:** `Cargo.toml`, `crates/ktu-memory/Cargo.toml`.

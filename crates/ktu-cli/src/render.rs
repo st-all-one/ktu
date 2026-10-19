@@ -28,7 +28,8 @@ impl Style {
 pub(crate) fn describe(event: &Event) -> String {
     match event {
         Event::TurnStart { prompt } => format!("» {prompt}"),
-        Event::Steer { text } => format!("» (steer) {text}"),
+        Event::Steer { text, .. } => format!("» (steer) {text}"),
+        Event::SteerQueued { text, .. } => format!("» (steer, admitido) {text}"),
         Event::Assistant {
             content,
             tool_calls,

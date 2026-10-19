@@ -46,3 +46,7 @@ Não é para tudo: bugs, estilo e nomes ficam no código e nos testes. ADRs curt
 | [0016](0016-h10-adiar-receitas-ricas-tool-search-e-agents-na-leitura.md) | H10: adiar receitas ricas, `tool_search` e `AGENTS.md` na leitura | substituída |
 | [0017](0017-implementar-a9-a11-antes-da-h11.md) | Implementar A9–A11 antes da H11 | aceite |
 | [0018](0018-gates-da-fase-2-por-guiao-deterministico.md) | Gates da Fase 2 por guião determinístico | aceite |
+| [0019](0019-fase-3-planeada-mas-condicionada-ao-gatilho.md) | Fase 3 planeada mas condicionada ao gatilho | aceite |
+| [0020](0020-schema-de-config-versionado-com-leitura-nao-destrutiva.md) | Schema de config versionado com migração de leitura não-destrutiva | aceite |
+| [0021](0021-o-init-nao-escreve-no-agents-md.md) | O `ktu init` não escreve no `AGENTS.md` | aceite |
+| [0022](0022-convencoes-na-base-do-prompt.md) | As convenções do ktu vivem na base do prompt (não numa skill gerada) | aceite |

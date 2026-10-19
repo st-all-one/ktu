@@ -1,0 +1,2 @@
+model = "m"
+deferred_tools = "bash, write_file"

@@ -280,8 +280,16 @@ impl Driver<'_, '_> {
                 outcome
             }
             Decision::Deny(reason) => {
-                let remedy = remedy.unwrap_or_else(|| reason.remedy());
-                ToolOutcome::error(format!("negado: {} — {remedy}", reason.as_str()))
+                // O remedio **da regra** junta-se ao estrutural, nunca o substitui:
+                // quem nega diz o que fazer, e o motivo diz onde procurar a politica.
+                let structural = reason.remedy();
+                let message = match remedy {
+                    Some(own) if own != structural => {
+                        format!("negado: {} — {own} ({structural})", reason.as_str())
+                    }
+                    _ => format!("negado: {} — {structural}", reason.as_str()),
+                };
+                ToolOutcome::error(message)
             }
             Decision::Escalate => ToolOutcome::error(format!(
                 "requer aprovacao: {}",

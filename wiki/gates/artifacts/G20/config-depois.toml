@@ -1,0 +1,4 @@
+schema = 1
+model = "m"
+effort = "high"
+deferred_tools = ["bash", "write_file"]

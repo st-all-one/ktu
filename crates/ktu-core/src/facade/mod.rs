@@ -72,7 +72,7 @@ use crate::budget::BudgetGate;
 use crate::cancel::CancelToken;
 use crate::domain::StopReason;
 use crate::guard::{Decision, Fact, Guard, StructuralGuard};
-use crate::guardrails::{self, ChainGuard, DeclarativeGuard};
+use crate::guardrails::{self, ChainGuard, DeclarativeGuard, Rule};
 use crate::layout::{AGENTS_DIR, SESSIONS_DIR};
 use crate::memory::Memory;
 use crate::permission::{self, PermissionGuard};
@@ -82,6 +82,7 @@ use crate::ports::{Clock, Fs, Instructions, Logger, Metrics};
 use crate::prompt::{BASE, Directive, compose_layers};
 use crate::provider::Provider;
 use crate::session::{Event, SessionLog};
+use crate::skill;
 use crate::store;
 use crate::subagent::SubagentHost;
 use crate::tool_search;
@@ -262,8 +263,16 @@ pub fn system_prompt_in(fs: &dyn Fs, root: &Path, user_dir: Option<&Path>) -> St
     // `AGENTS.md` da raiz + aninhados (raiz primeiro, o mais fundo mais tarde).
     let docs = agents_md::discover(fs, root);
     let instructions = agents_md::render(&docs, root);
+    // Skills dos dois níveis (M8): local ganha por nome; o corpo compõe o prompt.
+    let (skills, _problems) = skill::load(fs, user_dir, root);
+    let skills = skill::section(&skills);
     let base = directive.system().unwrap_or(BASE);
-    compose_layers(base, instructions.as_deref(), directive.append())
+    compose_layers(
+        base,
+        instructions.as_deref(),
+        skills.as_deref(),
+        directive.append(),
+    )
 }
 
 /// Avalia **um facto isolado** com o **mesmo** encadeamento de guardrails que a
@@ -283,16 +292,7 @@ pub fn evaluate_fact(
     fs: &dyn Fs,
     fact: &Fact,
 ) -> Result<Decision> {
-    // Guardrails globais primeiro (piso aditivo, M5) — a mesma ordem do `build()`.
-    let mut rules = match user_dir {
-        Some(dir) => guardrails::load(fs, &dir.join("guardrails"))
-            .map_err(|error| Error::invalid(format!("guardrails globais invalidos: {error}")))?,
-        None => Vec::new(),
-    };
-    rules.extend(
-        guardrails::load(fs, &root.join(AGENTS_DIR).join("guardrails"))
-            .map_err(|error| Error::invalid(format!("guardrails invalidos: {error}")))?,
-    );
+    let rules = declarative_rules(fs, root, user_dir)?;
     let permissions = permission::load(fs, root)
         .map_err(|error| Error::invalid(format!("erro nas permissoes: {error}")))?;
     let structural = StructuralGuard::for_spec(root, spec);
@@ -301,6 +301,23 @@ pub fn evaluate_fact(
     let inner = ChainGuard::new(&declarative, &permission);
     let chain = ChainGuard::new(&structural, &inner);
     Ok(chain.evaluate(fact))
+}
+
+/// Regras declarativas dos **dois** níveis, com o piso global primeiro (M5).
+///
+/// É a **mesma** composição no `build()` e no [`evaluate_fact`]: uma só função, para
+/// que o encadeamento da fachada e o da borda não possam divergir.
+///
+/// # Errors
+/// Devolve [`Error::Invalid`] se uma regra de qualquer dos níveis não carregar (I16).
+pub(super) fn declarative_rules(
+    fs: &dyn Fs,
+    root: &Path,
+    user_dir: Option<&Path>,
+) -> Result<Vec<Rule>> {
+    guardrails::load_layered(fs, user_dir, root)
+        .map(|rules| rules.into_iter().map(|(_, rule)| rule).collect())
+        .map_err(|error| Error::invalid(format!("guardrails invalidos: {error}")))
 }
 
 /// Resposta final do **turno corrente** (último passo sem `tool_calls`).

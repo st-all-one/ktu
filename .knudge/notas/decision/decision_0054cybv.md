@@ -1,0 +1,11 @@
+---
+id: decision_0054cybv
+type: decision
+statement: F6 (ktu self setup) fechado sem plano: o init ja cobre AGENTS.md/skill e o ktu nao tem MCP
+created_at: 2026-10-18T17:20:35.546Z
+body_hash: 73cf20cc
+schema_version: 2
+revision: 2
+anchors: [wiki/implementation_phase3/F6-self-setup.md, wiki/pendencias.md, crates/ktu-cli/src/init.rs]
+---
+Decisao (F6/D3). O `ktu self setup <cliente>` nao vale a pena agora e foi fechado **sem plano** (a pendencia D3 fica no dossier com o gatilho afinado). Motivo: (1) o `ktu init` ja escreve o bloco de protocolo (`<!-- ktu:start -->`) no AGENTS.md - a convencao cross-tool que pi, Claude Code, Cursor e Codex leem - e a skill em .agents/skills/ktu/SKILL.md, pelo que para esses clientes a integracao ja existe; (2) o unico caminho que o init nao cobre (servidor MCP) **nao existe no ktu** (MCP esta fora por YAGNI; quem tem knudge-mcp e o knudge), logo a receita de um cliente so poderia apontar para AGENTS.md/skill (feito), para `ktu run --command <nome>` (H10) ou para a porta HTTP do `ktu serve` - nenhum precisa de ficheiro novo no cliente; (3) o gatilho declarado nao disparou e o consumidor e hipotetico (ADR 0015: YAGNI com criterio de reabertura). Alternativas descartadas: (a) implementar o plano como escrito (bloco gerido no ficheiro do cliente + --dry-run + --list) - escrever num ficheiro de terceiros um conteudo que o cliente ja obtem pelo AGENTS.md, com o risco de apodrecer em paralelo; (b) implementar a variante do knudge (receita JSON na propria arvore) - mais segura, mas seria um ficheiro que ninguem le; (c) manter o item aberto a espera do gatilho - um item sem sintoma nao deve ocupar plano nem gate. Fica registado em wiki/implementation_phase3/F6-self-setup.md (com a analise e o desenho a preferir se reabrir), G21 fica sem gate (numeracao estavel, nao se reutiliza) e o gatilho em D3 passa a ser: um cliente concreto que nao leia AGENTS.md/skills, ou um pedido explicito de setup. Observacao registada (nao resolvida aqui): git::agents::version_in existe mas ninguem o chama - nada avisa que o bloco de protocolo do AGENTS.md esta velho - e o help do `ktu doctor` promete diagnostico de layout/conhecimento mas corre o diagnostico do provider.

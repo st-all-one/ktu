@@ -76,6 +76,30 @@ fn scan(root: &Path) -> Vec<Row> {
     rows
 }
 
+/// Identificadores das sessões persistidas (ordenados) — reutilizado pelo REPL (`/resume`).
+pub(crate) fn ids(root: &Path) -> Vec<String> {
+    scan(root).into_iter().map(|row| row.id).collect()
+}
+
+/// Copia o log de uma sessão para um novo id (gestão de ficheiros, sem porta).
+///
+/// # Errors
+/// Devolve mensagem legível se a origem não existir, o destino já existir ou a cópia falhar.
+pub(crate) fn copy(root: &Path, from: &str, to: &str) -> Result<(), String> {
+    let dir = sessions_dir(root);
+    let source = dir.join(format!("{from}.jsonl"));
+    let target = dir.join(format!("{to}.jsonl"));
+    if !source.is_file() {
+        return Err(format!("sessao inexistente: {from}"));
+    }
+    if target.exists() {
+        return Err(format!("destino ja existe: {to}"));
+    }
+    fs::copy(&source, &target)
+        .map(|_copied| ())
+        .map_err(|error| error.to_string())
+}
+
 /// Lista as sessões persistidas (`ktu session ls`).
 pub(crate) fn list(root: &Path, format: Format) -> ExitCode {
     let rows = scan(root);
@@ -146,29 +170,8 @@ pub(crate) fn remove(root: &Path, id: &str, format: Format) -> ExitCode {
 
 /// Copia uma sessão para um novo id (`ktu session fork <from> <to>`).
 pub(crate) fn fork(root: &Path, from: &str, to: &str, format: Format) -> ExitCode {
-    let dir = sessions_dir(root);
-    let source = dir.join(format!("{from}.jsonl"));
-    let target = dir.join(format!("{to}.jsonl"));
-    if !source.is_file() {
-        output::emit_error(
-            format,
-            "session fork",
-            "not_found",
-            &format!("sessao inexistente: {from}"),
-        );
-        return ExitCode::FAILURE;
-    }
-    if target.exists() {
-        output::emit_error(
-            format,
-            "session fork",
-            "invalid",
-            &format!("destino ja existe: {to}"),
-        );
-        return ExitCode::FAILURE;
-    }
-    match fs::copy(&source, &target) {
-        Ok(_) => {
+    match copy(root, from, to) {
+        Ok(()) => {
             output::emit(
                 format,
                 "session fork",
@@ -177,8 +180,8 @@ pub(crate) fn fork(root: &Path, from: &str, to: &str, format: Format) -> ExitCod
             );
             ExitCode::SUCCESS
         }
-        Err(error) => {
-            output::emit_error(format, "session fork", "io", &error.to_string());
+        Err(message) => {
+            output::emit_error(format, "session fork", "io", &message);
             ExitCode::FAILURE
         }
     }

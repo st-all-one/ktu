@@ -1,4 +1,4 @@
-//! Integração dos comandos `ktu memory export|list` e `ktu doctor --memory`.
+//! Integração dos comandos `ktu memory export|list|doctor`.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -53,7 +53,7 @@ fn memory_list_and_doctor_are_healthy() {
     };
     assert!(String::from_utf8_lossy(&listed.stdout).contains("o ktu memoriza entre sessoes"));
 
-    let Some(doctor) = run(&["doctor", "--memory", "--root"], &root) else {
+    let Some(doctor) = run(&["memory", "doctor", "--root"], &root) else {
         return;
     };
     assert!(

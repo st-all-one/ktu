@@ -13,7 +13,7 @@
 
 | Caminho | O quê | Consumido por |
 |---|---|---|
-| `AGENTS.md` | router de instruções do projecto (raiz) | system prompt |
+| `AGENTS.md` | instruções do projecto (raiz), escritas pelo humano | system prompt |
 | `**/AGENTS.md` | instruções **locais** (por directório) | system prompt |
 | `.agents/SYSTEM.md` | **substitui** a base do agente | system prompt |
 | `.agents/APPEND_SYSTEM.md` | **acrescenta** ao fim do prompt | system prompt |
@@ -55,7 +55,7 @@ $ ktu prompt            # o prompt efectivo (é o mesmo texto que o modelo receb
 
 ## 3. `AGENTS.md` aninhados
 
-O `AGENTS.md` da raiz é o router; um `AGENTS.md` mais fundo dá instruções **locais** (módulos,
+O `AGENTS.md` da raiz dá as instruções do projecto; um `AGENTS.md` mais fundo dá instruções **locais** (módulos,
 subprojectos). A descoberta é **determinística** e **limitada**:
 
 - raiz primeiro; depois os aninhados por ordem de caminho (o mais fundo vem **mais tarde** no

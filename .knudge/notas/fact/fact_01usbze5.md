@@ -1,0 +1,10 @@
+---
+id: fact_01usbze5
+type: fact
+statement: A fila de mutacao passou a ser do PROCESSO: serve (actor por sessao) e batch paralelo partilham-na
+created_at: 2026-10-18T15:14:16.882Z
+body_hash: 6dd3e24f
+schema_version: 2
+anchors: [crates/ktu-tools/src/mutation.rs, crates/ktu-tools/src/fs_tools.rs, crates/ktu-cli/src/hub.rs, crates/ktu-cli/src/batch.rs, crates/ktu-cli/src/turn_runtime.rs]
+---
+Correccao a seguir ao F4 (defeito existente, apontado pelo utilizador). A FileMutationQueue vivia DENTRO do FsTools, que e criado por turno em execute_turn - mas o hub cria um actor por sessao (hub.rs: tokio::spawn(run_actor)) e o --batch --parallel uma thread por worker (batch.rs: std::thread::scope), logo cada turno tinha a sua T2 e a SUA fila: duas sessoes do mesmo processo editavam o mesmo ficheiro sem se verem (perda de alteracao), e o G13 nao apanhava isto porque os 4 itens do batch so LEM a.txt. Correccao: a fila passou a Arc<FileMutationQueue> no Inner do hub (criada em SessionHub::new) e uma por lote em batch::run, injectada em execute_turn(..., mutations: &Arc<FileMutationQueue>) -> Toolbox::new(..., &mutations) -> FsTools::new(root, fs, queue: &FileMutationQueue). O Arc e clonado para dentro da closure da T2 (a thread exige Send + static; uma referencia nao serve). API: FsTools::new/Toolbox::new ganharam o parametro da fila (DI explicita, como as portas). Provas novas: ktu-tools tests/mutation.rs::two_tool_sets_sharing_a_queue_serialize_the_same_path (duas instancias, tracked()==1, ambas as edicoes no ficheiro) e ktu-cli hub/tests.rs::the_hub_shares_one_mutation_queue_across_sessions (duas sessoes, dois turnos scripted a editar o mesmo ficheiro -> hub.inner.mutations.tracked() == 1; se cada turno tivesse a sua fila seria 0). Gate G19 8/8. Fora do ambito (pendencias D13/D14): lock de ficheiro ENTRE processos (a fila e em memoria; o TurnLock so trava o mesmo id de sessao) e escrita atomica (temp + Fs::rename, que a porta ja tem).

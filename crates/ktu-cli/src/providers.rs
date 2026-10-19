@@ -6,7 +6,22 @@ use std::process::ExitCode;
 use ktu_provider::{DoctorReport, Probe, diagnose};
 use tokio::runtime::Builder;
 
+use crate::cli::ProvidersAction;
 use crate::output::{self, Format};
+
+/// Executa a acção de `ktu providers`.
+pub(crate) fn run(action: ProvidersAction, format: Format) -> ExitCode {
+    match action {
+        ProvidersAction::Doctor {
+            base_url,
+            gguf,
+            probe,
+        } => {
+            let choice = if probe { Probe::Run } else { Probe::Skip };
+            doctor(&base_url, gguf.as_deref(), choice, format)
+        }
+    }
+}
 
 /// Corre o diagnóstico e imprime o relatório em `stdout`.
 pub(crate) fn doctor(

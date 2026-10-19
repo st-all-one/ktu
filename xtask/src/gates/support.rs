@@ -151,6 +151,11 @@ impl Ctx {
     pub(crate) fn cargo(&self, args: &[&str]) -> Result<Output, String> {
         exec(Path::new("cargo"), args, &self.root, "")
     }
+
+    /// Corre `cargo <args>` na raiz com variáveis de ambiente extra (ex.: `RUSTDOCFLAGS`).
+    pub(crate) fn cargo_env(&self, args: &[&str], env: &[(&str, &str)]) -> Result<Output, String> {
+        exec_env(Path::new("cargo"), args, &self.root, "", env)
+    }
 }
 
 /// Corre um comando arbitrário em `dir`, com a config do utilizador isolada.
@@ -160,12 +165,24 @@ pub(crate) fn exec(
     dir: &Path,
     input: &str,
 ) -> Result<Output, String> {
+    exec_env(program, args, dir, input, &[])
+}
+
+/// Como `exec`, com variáveis de ambiente extra.
+pub(crate) fn exec_env(
+    program: &Path,
+    args: &[&str],
+    dir: &Path,
+    input: &str,
+    env: &[(&str, &str)],
+) -> Result<Output, String> {
     use std::io::Write as _;
     let mut child = Command::new(program)
         .args(args)
         .current_dir(dir)
         .env("XDG_CONFIG_HOME", dir.join("xdg"))
         .env("HOME", dir.join("home"))
+        .envs(env.iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

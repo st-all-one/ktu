@@ -9,9 +9,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ktu_core::cancel::CancelToken;
+use ktu_core::checkpoint;
 use ktu_core::plan::{Approval, Mode};
 use ktu_core::ports::Logger;
-use ktu_core::session::{Event, SessionLog};
+use ktu_core::session::{Event, SessionLog, SteerMessage};
 use ktu_core::store;
 use ktu_port::host::Host;
 use ktu_port::port::EventStream;
@@ -44,7 +45,7 @@ pub(crate) struct Handle {
     events: broadcast::Sender<ServerMsg>,
     cancel: Arc<Mutex<Option<CancelToken>>>,
     snapshot: Arc<Mutex<Snapshot>>,
-    steering: Arc<Mutex<Vec<String>>>,
+    steering: Arc<Mutex<Vec<SteerMessage>>>,
 }
 
 impl Handle {
@@ -90,14 +91,23 @@ impl Handle {
     }
 
     /// Fila de *steering* partilhada com o actor (lida na fronteira de passo).
-    pub(crate) fn steering(&self) -> Arc<Mutex<Vec<String>>> {
+    pub(crate) fn steering(&self) -> Arc<Mutex<Vec<SteerMessage>>> {
         Arc::clone(&self.steering)
     }
 
     /// Enfileira uma mensagem de *steering* (não passa pelo canal de comandos:
     /// o actor está ocupado a correr o turno).
-    pub(crate) fn enqueue_steering(&self, text: &str) {
-        Self::lock(&self.steering).push(text.to_owned());
+    ///
+    /// O `id` vem do chamador; repetir o mesmo `id` não duplica a mensagem (M7).
+    pub(crate) fn enqueue_steering(&self, id: &str, text: &str) {
+        let mut queue = Self::lock(&self.steering);
+        if queue.iter().any(|message| message.id == id) {
+            return;
+        }
+        queue.push(SteerMessage {
+            id: id.to_owned(),
+            text: text.to_owned(),
+        });
     }
 
     fn subscribe(&self) -> broadcast::Receiver<ServerMsg> {
@@ -110,6 +120,9 @@ pub(crate) struct Inner {
     pub(crate) root: PathBuf,
     pub(crate) config: RunConfig,
     pub(crate) logger: Arc<dyn Logger>,
+    /// Fila de mutação **do processo** (F4): cada sessão corre o seu turno numa T2
+    /// própria, pelo que uma fila por turno não serializaria sessões diferentes.
+    pub(crate) mutations: Arc<ktu_tools::FileMutationQueue>,
     sessions: Mutex<BTreeMap<String, Handle>>,
 }
 
@@ -126,6 +139,7 @@ impl SessionHub {
                 root,
                 config,
                 logger,
+                mutations: Arc::new(ktu_tools::FileMutationQueue::new()),
                 sessions: Mutex::new(BTreeMap::new()),
             }),
         }
@@ -181,6 +195,13 @@ impl SessionHub {
                 )));
             }
         };
+        // O corte de compactação vive no **checkpoint** (o log cru fica intacto): retomar
+        // a sessão mantém a compactação forçada por `/compact` ou `--compact`.
+        if let Ok(Some(checkpoint)) = checkpoint::load(&fs, &dir, session_id)
+            && let Some(keep_from) = checkpoint.keep_from
+        {
+            log.set_compaction(usize::try_from(keep_from).unwrap_or(0));
+        }
         let resumed = !log.events().is_empty();
         if self.inner.config.plan && log.mode() != Mode::Plan {
             log.set_mode(Mode::Plan);
@@ -194,6 +215,22 @@ impl SessionHub {
             session_id: session_id.to_owned(),
             resumed,
         })
+    }
+
+    /// Força a compactação do contexto da sessão (o `/compact` do REPL).
+    ///
+    /// # Errors
+    /// Devolve erro se a sessão não existir ou houver um turno em curso.
+    pub(crate) async fn compact(&self, session_id: &str) -> Result<(), PortError> {
+        let handle = self.handle(session_id)?;
+        let (reply, receiver) = oneshot::channel();
+        handle
+            .command()
+            .send(Cmd::Compact { reply })
+            .map_err(|_| PortError::NoSession(session_id.to_owned()))?;
+        receiver
+            .await
+            .map_err(|_| PortError::Transport("actor terminou".to_owned()))?
     }
 }
 
@@ -233,8 +270,8 @@ impl Host for SessionHub {
         Ok(())
     }
 
-    async fn steer(&self, session_id: &str, text: &str) -> Result<(), PortError> {
-        self.handle(session_id)?.enqueue_steering(text);
+    async fn steer(&self, session_id: &str, id: &str, text: &str) -> Result<(), PortError> {
+        self.handle(session_id)?.enqueue_steering(id, text);
         Ok(())
     }
 

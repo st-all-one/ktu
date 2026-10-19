@@ -1,10 +1,14 @@
 //! `ktu init` — prepara o ambiente do projecto, de forma **idempotente**.
 //!
-//! Cria o layout (`.agents/` conhecimento, `.ktu/` runtime), a skill do ktu, o
-//! template de config, o bloco gerido no `AGENTS.md` e as exclusões/atributos do
-//! git. Os transformadores de texto são **puros** ([`ktu_core::git`]); aqui só se
-//! lê e escreve. `--force` reescreve os ficheiros **gerados** (skill, config) —
-//! nunca a memória nem os guardrails editados pelo humano.
+//! Cria o layout (`.agents/` conhecimento, `.ktu/` runtime), o template de config e as
+//! exclusões/atributos do git. Os transformadores de texto são **puros**
+//! ([`ktu_core::git`]); aqui só se lê e escreve. `--force` reescreve os ficheiros
+//! **gerados** (config) — nunca a memória nem os guardrails editados pelo humano.
+//!
+//! O `ktu init` **não** gera conteúdo sobre o próprio ktu: nem o `AGENTS.md` (é o
+//! ficheiro de instruções do projecto, escrito pelo humano — ADR 0021), nem uma skill
+//! `ktu` (as convenções vivem na base do prompt do agente — ADR 0022). O protocolo
+//! completo é o `ktu prime`.
 
 use std::env;
 use std::fs;
@@ -104,12 +108,7 @@ fn run(root: &Path, options: &Options) -> io::Result<Report> {
         );
     }
 
-    // 4. Skill e config (ficheiros gerados; `--force` reescreve).
-    let skill = root.join(layout::SKILL_FILE);
-    report.push(
-        layout::SKILL_FILE,
-        write_managed(&skill, layout::SKILL_BODY.as_bytes(), options.overwrite)?,
-    );
+    // 4. Config (ficheiro gerado; `--force` reescreve).
     let config = root.join(layout::CONFIG_FILE);
     report.push(
         layout::CONFIG_FILE,
@@ -120,14 +119,7 @@ fn run(root: &Path, options: &Options) -> io::Result<Report> {
         )?,
     );
 
-    // 5. `AGENTS.md` (bloco gerido, idempotente).
-    let agents = root.join(git::agents::FILE);
-    report.push(
-        git::agents::FILE,
-        apply_block(&agents, git::agents::upsert)?,
-    );
-
-    // 6. Git (no-op fora de repositório).
+    // 5. Git (no-op fora de repositório).
     if let Some(git_dir) = git_dir(root) {
         report.in_repo = true;
         let exclude = git_dir.join("info").join("exclude");
@@ -309,9 +301,7 @@ mod tests {
         let root = temp_root("layout");
         let report = run(&root, &options(GitMode::Tracked))?;
         assert!(root.join(layout::NOTES_FILE).is_file());
-        assert!(root.join(layout::SKILL_FILE).is_file());
         assert!(root.join(layout::CONFIG_FILE).is_file());
-        assert!(root.join("AGENTS.md").is_file());
         assert!(!report.in_repo);
 
         let again = run(&root, &options(GitMode::Tracked))?;
@@ -328,14 +318,14 @@ mod tests {
     }
 
     #[test]
-    fn agents_block_is_upserted_once() -> io::Result<()> {
+    fn the_project_agents_file_is_never_touched() -> io::Result<()> {
         let root = temp_root("agents");
         fs::create_dir_all(&root)?;
-        fs::write(root.join("AGENTS.md"), "# AGENTS\n\nRegras humanas.\n")?;
+        let human = "# AGENTS\n\nRegras humanas.\n";
+        fs::write(root.join("AGENTS.md"), human)?;
         run(&root, &options(GitMode::Tracked))?;
-        let text = fs::read_to_string(root.join("AGENTS.md"))?;
-        assert!(text.contains("Regras humanas."));
-        assert_eq!(text.matches("<!-- ktu:start -->").count(), 1);
+        // O `AGENTS.md` é do projecto: o `ktu init` não escreve nele.
+        assert_eq!(fs::read_to_string(root.join("AGENTS.md"))?, human);
         let _ignored = fs::remove_dir_all(&root);
         Ok(())
     }
@@ -386,10 +376,6 @@ mod tests {
 
         assert_eq!(fs::read(&notes)?, b"{\"id\":\"x\"}\n");
         assert_eq!(fs::read(&guardrail)?, b"editado a mao\n");
-        assert_eq!(
-            fs::read_to_string(root.join(layout::SKILL_FILE))?,
-            layout::SKILL_BODY
-        );
 
         let _ignored = fs::remove_dir_all(&root);
         Ok(())

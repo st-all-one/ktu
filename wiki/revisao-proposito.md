@@ -22,7 +22,7 @@
 | Modo plano read-only | ✅ | I15; `AgentSpec` só-leitura + `plan`; transição aprovada |
 | Taint (dado ≠ instrução) | ✅ | I13; envelope que não muda comprimento |
 | Memória project-bound | ✅ | `.agents/memory/*.jsonl`; `ktu-memory` (porta `Memory` + knudge) |
-| Convenções | ✅ | `.agents/` (skills/guardrails/memory) + `AGENTS.md` como *router* (condensado) |
+| Convenções | ✅ | `.agents/` (skills/guardrails/memory) + `AGENTS.md` do projecto (condensado no prompt) |
 | Caminhos de interacção | ⚠️ | `ktu run` (1 turno), `ktu serve`, `ktu tui` (cliente), **crate** (raw) |
 | Configuração | ❌ | só defaults no código + env + flags; **sem ficheiro de config** |
 | Usabilidade medida | ⚠️ | G4 verde **com o modelo de referência** e a bateria p1–p4 |

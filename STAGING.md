@@ -21,8 +21,27 @@
 | H11 | governança (ADRs, postmortems, dossiê, medição, teto de superfície) | fechada |
 | H12 | gates G10–G15 (artefactos em `wiki/gates/`) | fechada |
 
-**Fase 3** (adiados por YAGNI, com critério de reabertura) em
-[`wiki/implementation_phase2/ADIADOS.md`](wiki/implementation_phase2/ADIADOS.md) e no
+**Fase 3** — **em curso**: **F1** (*steering* durável e idempotente, M7) **fechado** (gate **G16**
+verde) **F2** (REPL interactivo: comandos `/` + Ctrl-C) **fechado excepto a Tab** (gate **G17** verde) e
+**F3** (recursos globais + piso visível, M8) **fechado** (gate **G18** verde), **F4** (fiabilidade
+de edição: fila por caminho — agora **do processo** —, remédio por regra, âncoras próximas)
+**fechado** (gate **G19** verde), **F5** (migrações de config: `schema = 1`, leitura não
+destrutiva, fail-closed, `ktu config doctor`) **fechado** (gate **G20** verde — sem o gatilho
+declarado, desvio registado na [ADR 0020](wiki/adr/0020-schema-de-config-versionado-com-leitura-nao-destrutiva.md))
+e **F7** (travões: `check-links` + `cargo doc` no `make check` e o portão do knudge na CI)
+**fechado** (gate **G22** verde) e **F6** (`ktu self setup`) **fechado sem plano** — o ktu não se
+anuncia em ficheiros de outros produtos e não tem servidor MCP; a pendência (**D3**) fica no dossiê
+com o gatilho afinado. **Fecha a Fase 3**.
+
+O `ktu init` deixou de escrever no `AGENTS.md` ([ADR 0021](wiki/adr/0021-o-init-nao-escreve-no-agents-md.md))
+e de gerar a skill `ktu` ([ADR 0022](wiki/adr/0022-convencoes-na-base-do-prompt.md)): o ficheiro é
+do projecto e as convenções vivem na base do prompt do agente (o protocolo completo é o
+`ktu prime`). Medido num projecto novo: `ktu prompt` 995 → **737 bytes** (−258/turno). O `ktu doctor`
+diagnostica a estrutura que o `init` cria (layout, `memory_source`, `config`, com remédio) e o
+diagnóstico da memória tem porta própria (`ktu memory doctor`). Cada item tem plano, tarefa e gate em
+[`wiki/implementation_phase3/`](wiki/implementation_phase3/README.md) (`epic_00j1cgo3`), com o
+**gatilho declarado** (M7/M8 são os invariantes novos). O registo do adiamento está em
+[`ADIADOS.md`](wiki/implementation_phase2/ADIADOS.md) (absorvido) e a lista verificada no
 [dossiê de pendências](wiki/pendencias.md).
 
 ## 1. Gate G4 — confirmado fechado ✅
@@ -68,7 +87,7 @@ reais**. Amostra verificada por leitura:
   sampling/thinking, GGUF doctor, modelo real (Ornith).
 - **G3** (5/5): spike do knudge-core, porta `Memory`+adaptador JSONL, memory gate
   (recall+write automáticos, dedup 0.75/0.92), compactação+checkpoint durável,
-  `memory export`/`doctor --memory`.
+  `memory export`/`memory doctor`.
 
 ## 3. Caveats / pontos a vigiar (não invalidam o gate)
 

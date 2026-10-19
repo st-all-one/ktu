@@ -1,0 +1,15 @@
+ktu session s [Build] — retomada; /help ajuda, /quit sai
+comandos:
+  /help            esta ajuda
+  /plan            muda para modo plano (SetMode)
+  /build           volta a build (com aprovacao)
+  /mode            mostra o modo corrente
+  /cancel          cancela o turno em curso
+  /compact         forca a compactacao do contexto
+  /fork <novo>     copia esta sessao para um novo id
+  /memory          mostra a memoria do projecto
+  /resume [id]     abre outra sessao (sem id, lista-as)
+  /quit            sai (Ctrl-D tambem)
+multi-linha: termina a linha com `\` para continuar.
+durante um turno: escrever envia *steering*; /cancel cancela.
+ate a proxima.

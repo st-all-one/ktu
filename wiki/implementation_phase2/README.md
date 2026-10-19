@@ -45,7 +45,7 @@ H12 Gates da Fase 2 (G10–G15) ── saída da fase
 
 ── Fase 2 fechada ─────────────────────────────────────────────────────────
 
-Fase 3 — Adiados (YAGNI)      ── ver [ADIADOS](./ADIADOS.md) (pós-H12)
+Fase 3 — implementação condicionada ── ver [implementation_phase3](../implementation_phase3/README.md)
 ```
 
 | # | Issue | Âncora (backlog) | Tarefas | Estado |
@@ -66,11 +66,14 @@ Fase 3 — Adiados (YAGNI)      ── ver [ADIADOS](./ADIADOS.md) (pós-H12)
 
 **Total:** 13 issues · **54 tarefas** (`kd task list --scope task --tag fase2`) — **13/13 issues
 fechadas** (H0–H12). Os gates da Fase 2 (G10–G15) estão verdes, com artefactos em
-[`wiki/gates/`](../gates/README.md). A **Fase 3** ([ADIADOS](./ADIADOS.md)) só abre com sintoma.
+[`wiki/gates/`](../gates/README.md). A **Fase 3** está **planeada** em
+[`implementation_phase3/`](../implementation_phase3/README.md) (`epic_00j1cgo3`): cada item tem o
+gatilho declarado e um gate (G16–G22), e só arranca quando o gatilho disparar.
 
-> **Depois de a Fase 2 fechar:** os itens **adiados por YAGNI** (recursos globais, migrações,
-> `recipes`/`setup`, `.ktu/logs`) estão na **Fase 3** — [ADIADOS](./ADIADOS.md) — e **não**
-> entram antes de a Fase 2 concluir.
+> **Depois de a Fase 2 fechar:** os itens **adiados por YAGNI** foram **reavaliados** contra o
+> código (ver [ADIADOS](./ADIADOS.md), agora registo): os que valem a pena têm plano na **Fase 3**
+> ([`implementation_phase3/`](../implementation_phase3/README.md)); o `.ktu/logs` foi fechado
+> (não é trabalho) e A9–A11 já estavam implementados.
 
 > **Leitura obrigatória antes de executar:** [NOTAS-RUST](./NOTAS-RUST.md) (skills Rust × princípios)
 > e [GATES](./GATES.md) (G10–G15, usabilidade em cadeias extensas).

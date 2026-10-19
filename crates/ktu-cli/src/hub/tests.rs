@@ -1,5 +1,6 @@
 //! Testes do serviço de sessões (actor + porta), com provider `mock`.
 
+use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -30,6 +31,15 @@ fn mock_config() -> RunConfig {
         session: SessionTarget::Persistent("default".to_owned()),
         mode: SessionMode::Fresh,
         plan: false,
+    }
+}
+
+/// Configuração com o provider `scripted` (um guião lido por turno).
+fn scripted_config(script: PathBuf) -> RunConfig {
+    RunConfig {
+        provider: "scripted".to_owned(),
+        script: Some(script),
+        ..mock_config()
     }
 }
 
@@ -106,10 +116,101 @@ async fn set_mode_is_logged_and_persisted() -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
+/// `/compact` corta o contexto, grava o checkpoint e o corte **sobrevive** a retomar.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn compact_is_persisted_and_restored_on_resume() -> Result<(), Box<dyn std::error::Error>> {
+    let root = fresh_root();
+    let _ignored = std::fs::remove_dir_all(&root);
+    ensure_layout(&root)?;
+    let hub = SessionHub::new(root.clone(), mock_config(), Arc::new(NoopLogger));
+
+    hub.create_session("s1").await?;
+    for prompt in ["um", "dois", "tres"] {
+        let _logs = run_one_turn(&hub, "s1", prompt).await?;
+    }
+    assert_eq!(hub.state("s1").await?.keep_from, None);
+
+    hub.compact("s1").await?;
+    let keep_from = hub.state("s1").await?.keep_from;
+    assert!(keep_from.is_some(), "o corte tem de ficar no estado");
+    // O log cru fica intacto (a compactacao e uma projecao).
+    assert_eq!(
+        hub.state("s1")
+            .await?
+            .log
+            .iter()
+            .filter(|event| matches!(event, Event::TurnStart { .. }))
+            .count(),
+        3
+    );
+
+    // Uma sessao nova na mesma raiz retoma o corte do checkpoint.
+    let resumed = SessionHub::new(root.clone(), mock_config(), Arc::new(NoopLogger));
+    resumed.create_session("s1").await?;
+    assert_eq!(resumed.state("s1").await?.keep_from, keep_from);
+
+    let _ignored = std::fs::remove_dir_all(&root);
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cancel_on_unknown_session_is_not_found() {
     let root = fresh_root();
     let hub = SessionHub::new(root, mock_config(), Arc::new(NoopLogger));
     let error = hub.cancel("nao-existe").await;
     assert!(matches!(error, Err(PortError::NoSession(_))));
+}
+
+/// A fila de mutação é **do processo**: duas sessões (cada uma com a sua T2) editam o
+/// mesmo ficheiro pelo **mesmo** `FileMutationQueue`.
+///
+/// O `ktu serve` corre um actor por sessão; uma fila por turno não serializaria nada
+/// entre elas. A prova é a chave: uma só entrada na fila do hub.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_hub_shares_one_mutation_queue_across_sessions()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = fresh_root();
+    let _ignored = std::fs::remove_dir_all(&root);
+    ensure_layout(&root)?;
+    let mut initial = String::new();
+    for index in 0..8 {
+        let _ignored = writeln!(initial, "marca-{index}");
+    }
+    std::fs::write(root.join("alvo.txt"), &initial)?;
+    // Dois turnos (um por sessão), cada um a editar uma âncora distinta.
+    let mut script = String::new();
+    for index in 0..2 {
+        let arguments = serde_json::json!({
+            "path": "alvo.txt",
+            "edits": [{ "old": format!("marca-{index}\n"), "new": format!("editada-{index}\n") }],
+        });
+        let call = serde_json::json!({
+            "text": "",
+            "tool_calls": [{ "id": "c1", "name": "edit_file", "arguments": arguments.to_string() }],
+        });
+        let _ignored = writeln!(script, "{call}\n{{\"text\":\"fim\"}}");
+    }
+    let script_path = root.join("guiao.jsonl");
+    std::fs::write(&script_path, script)?;
+    let hub = SessionHub::new(
+        root.clone(),
+        scripted_config(script_path),
+        Arc::new(NoopLogger),
+    );
+
+    for session in ["s1", "s2"] {
+        hub.create_session(session).await?;
+        let _logs = run_one_turn(&hub, session, "edita").await?;
+    }
+
+    let after = std::fs::read_to_string(root.join("alvo.txt"))?;
+    assert!(after.contains("editada-0\n"), "{after}");
+    assert!(after.contains("editada-1\n"), "{after}");
+    assert_eq!(
+        hub.inner.mutations.tracked(),
+        1,
+        "as duas sessoes nao usaram a fila do processo"
+    );
+    let _ignored = std::fs::remove_dir_all(&root);
+    Ok(())
 }

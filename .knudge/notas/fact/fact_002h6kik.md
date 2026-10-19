@@ -1,0 +1,10 @@
+---
+id: fact_002h6kik
+type: fact
+statement: F7 fechada (G22 6/6): check-links + cargo doc no make check e o portao do knudge na CI
+created_at: 2026-10-18T15:31:44.599Z
+body_hash: 0ad2ad69
+schema_version: 2
+anchors: [xtask/src/links.rs, Makefile, .github/workflows/ci.yml, xtask/src/gates/brakes.rs]
+---
+Fecha L3 e L1 (F7, gate G22 verde 6/6). L3: novo xtask/src/links.rs (alvo `make links`), que varre wiki/**/*.md + README.md + STAGING.md + plan.md, resolve cada destino relativo contra o directorio do ficheiro e falha com o par (ficheiro, alvo) — 770 links, 0 quebrados, 0 avisos. O `--root` existe para o gate apontar a verificacao a uma arvore de ensaio com um link deliberadamente quebrado (sem ele, provar a falha exigiria quebrar a wiki verdadeira). Semantica de codigo: fiel ao CommonMark — uma sequencia de crases sem fecho do mesmo tamanho e texto literal (nao engole o resto do ficheiro) e uma crase escapada por barra invertida nao abre codigo (a wiki real escreve `dica: rode \`kd init\``); a primeira versao truncava o ficheiro e escondia links. Ancora inexistente e aviso em stderr, nunca erro (o slug do GitHub muda com o titulo). `cargo doc` com RUSTDOCFLAGS=\"-D warnings\" entrou no make check (alvo `make doc`, --no-deps): medido ~4 s com o alvo quente (o test do mesmo portao ja construiu as rlibs) e ~34 s com um alvo proprio vazio — abaixo do limiar declarado de 60 s, pelo que nao precisa de alvo separado. O travo pagou-se no primeiro dia: apanhou `redundant_explicit_links` em crates/ktu-cli/src/instructions.rs, fora do alcance de todos os travos desde o inicio. L1: alvo `make check-knudge` (cd crates/knudge && make check) + job `knudge` na CI com rust-cache sobre crates/knudge; o G22 corre a suite (22 binarios de teste, 0 falhas; ~6 s quente, ~45 s com alvo vazio) e verifica o passo no workflow + o alvo no Makefile. Fora: links externos http(s) (rede nao-deterministica).

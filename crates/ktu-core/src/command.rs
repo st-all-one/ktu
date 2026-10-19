@@ -8,10 +8,13 @@
 //! O carregamento é **fail-open**: um ficheiro malformado é ignorado (com
 //! mensagem) e nunca impede a sessão.
 
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use crate::frontmatter::{self, Frontmatter};
+use crate::layout::{COMMANDS_DIR, RECIPES_DIR};
+use crate::origin::Origin;
 use crate::ports::Fs;
 
 /// Marcador substituído pelos argumentos da linha de comando.
@@ -250,6 +253,38 @@ pub fn load(fs: &dyn Fs, dir: &Path) -> (Vec<Command>, Vec<String>) {
     }
     commands.sort_by(|left, right| left.name.cmp(&right.name));
     (commands, problems)
+}
+
+/// Uma receita com o nível de onde veio (M8).
+pub type Loaded = (Origin, Command);
+
+/// Carrega as receitas dos **dois** níveis, com a origem de cada uma.
+///
+/// O **local ganha por nome**: uma receita do projecto com o mesmo nome substitui a
+/// global (precedência declarada, M8). Devolve os pares ordenados por nome e a lista
+/// de problemas dos dois níveis (fail-open, como [`load`]).
+#[must_use]
+pub fn load_layered(
+    fs: &dyn Fs,
+    user_dir: Option<&Path>,
+    root: &Path,
+) -> (Vec<Loaded>, Vec<String>) {
+    let mut found: BTreeMap<String, Loaded> = BTreeMap::new();
+    let mut problems: Vec<String> = Vec::new();
+    for (origin, dir) in [
+        user_dir.map(|dir| (Origin::Global, dir.join(RECIPES_DIR))),
+        Some((Origin::Local, root.join(COMMANDS_DIR))),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let (commands, mut issues) = load(fs, &dir);
+        problems.append(&mut issues);
+        for command in commands {
+            found.insert(command.name.clone(), (origin, command));
+        }
+    }
+    (found.into_values().collect(), problems)
 }
 
 /// Separa os argumentos de um comando em palavras (aspas simples ou duplas).

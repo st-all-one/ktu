@@ -7,17 +7,20 @@ use crate::memory::Memory;
 use crate::plugin::Hooks;
 use crate::ports::{Clock, Instructions, Logger, Metrics};
 use crate::provider::Provider;
+use crate::session::SteerMessage;
 use crate::subagent::SubagentHost;
 use crate::tools::ToolExecutor;
 
 /// Porta de *steering*: mensagens do utilizador entregues numa **fronteira segura**
 /// (início de um passo), sem matar o turno.
 ///
-/// A mensagem é **logada** como [`crate::session::Event::Steer`] antes de entrar no
-/// contexto do modelo, preservando *model-visible ⟺ logged*.
+/// A mensagem é **admitida** no log ([`crate::session::Event::SteerQueued`]) e só depois
+/// entregue ([`crate::session::Event::Steer`], no passo seguinte) — preservando
+/// *model-visible ⟺ logged* e tornando a admissão **durável** (M7). O `id` vem da
+/// **borda**: repetir o mesmo `id` não duplica a mensagem.
 pub trait Steering: Send + Sync {
-    /// Retira as mensagens pendentes, por ordem de chegada.
-    fn take(&self) -> Vec<String>;
+    /// Retira as mensagens admitidas e ainda não entregues, por ordem de chegada.
+    fn take(&self) -> Vec<SteerMessage>;
 }
 
 /// Configuração do loop.

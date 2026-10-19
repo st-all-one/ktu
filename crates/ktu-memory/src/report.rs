@@ -1,4 +1,4 @@
-//! Vista derivada (`export --md`) e saúde da memória (`doctor --memory`).
+//! Vista derivada (`export --md`) e saúde da memória (`ktu memory doctor`).
 //!
 //! Nenhum destes é **fonte**: são projecções de leitura do `notes.jsonl`.
 

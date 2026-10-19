@@ -25,6 +25,12 @@ pub const AGENTS_DIR: &str = ".agents";
 /// Directório dos comandos do projecto (`/nome` na sessão interactiva).
 pub const COMMANDS_DIR: &str = ".agents/commands";
 
+/// Directório das receitas **globais** (por baixo do directório do utilizador).
+///
+/// Uma receita global é um comando do projecto que o utilizador quer em todos os
+/// projectos; o local ganha por nome.
+pub const RECIPES_DIR: &str = "recipes";
+
 /// Directório dos agentes declarativos do projecto.
 pub const AGENTS_FILES_DIR: &str = ".agents/agents";
 
@@ -39,31 +45,6 @@ pub const APPEND_SYSTEM_FILE: &str = ".agents/APPEND_SYSTEM.md";
 
 /// Directório das sessões persistidas (log JSONL + *checkpoint*).
 pub const SESSIONS_DIR: &str = ".ktu/sessions";
-
-/// Caminho da skill do ktu (protocolo do agente para este projecto).
-pub const SKILL_FILE: &str = ".agents/skills/ktu/SKILL.md";
-
-/// Corpo da skill do ktu (frontmatter + corpo), criado por `ktu init`.
-pub const SKILL_BODY: &str = "\
----
-name: ktu
-description: Usa o agente ktu neste projecto — ciclo, memória, guardrails e tools.
----
-
-# ktu
-
-O ktu é o agente mínimo deste projecto. O protocolo completo está em `ktu prime`.
-
-## Ciclo
-entender → planear → editar → correr → verificar.
-
-## Memória
-- Consulta antes de decidir (`memory_ask`); grava cada aprendizado (`memory_write`).
-- `.agents/memory/notes.jsonl` é a fonte da verdade; o índice é derivado.
-
-## Convenções
-- `.agents/` = conhecimento (versionável) · `.ktu/` = runtime · `AGENTS.md` = router.
-";
 
 /// Caminho da configuração do projecto.
 pub const CONFIG_FILE: &str = ".agents/config.toml";
@@ -82,7 +63,7 @@ mod tests {
 
     use super::{
         AGENTS_DIR, AGENTS_FILE, APPEND_SYSTEM_FILE, COMMANDS_DIR, CONFIG_FILE, CONFIG_TEMPLATE,
-        INIT_DIRS, NOTES_FILE, SESSIONS_DIR, SKILL_BODY, SKILL_FILE, SYSTEM_FILE,
+        INIT_DIRS, NOTES_FILE, SESSIONS_DIR, SYSTEM_FILE,
     };
 
     #[test]
@@ -124,9 +105,7 @@ mod tests {
 
     #[test]
     fn skill_and_config_live_under_agents() {
-        assert!(SKILL_FILE.starts_with(".agents/skills/"));
         assert!(CONFIG_FILE.starts_with(".agents/"));
-        assert!(SKILL_BODY.contains("ktu prime"));
         assert!(CONFIG_TEMPLATE.starts_with('#'));
     }
 

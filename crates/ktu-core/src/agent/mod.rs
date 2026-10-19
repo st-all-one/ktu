@@ -10,6 +10,7 @@ mod delegation;
 mod deps;
 mod logging;
 mod spec;
+mod steering;
 mod support;
 mod toolcall;
 
@@ -276,24 +277,13 @@ impl Driver<'_, '_> {
         Step::Continue
     }
 
-    /// Entrega o *steering* pendente numa **fronteira segura** (início do passo).
+    /// Entrega o *steering* admitido e admite o que chegou agora (M7).
     ///
-    /// A mensagem é logada **antes** de entrar no contexto, preservando
-    /// *model-visible ⟺ logged*; a ordem é a de chegada.
+    /// A ordem e a durabilidade vivem em [`steering::inject`]: entrega primeiro o que já
+    /// estava admitido (inclui uma admissão que sobreviveu a um *crash*), admite depois o
+    /// que chegou — a admissão fica no log **antes** da entrega.
     fn inject_steering(&mut self, deps: &Deps<'_>) {
-        let Some(steering) = deps.capabilities.steering else {
-            return;
-        };
-        for text in steering.take() {
-            log_event(
-                deps,
-                Level::Info,
-                events::STEER,
-                "mensagem de steering entregue",
-                &[],
-            );
-            self.log.push(Event::Steer { text });
-        }
+        steering::inject(self.log, deps);
     }
 
     /// Repara os argumentos das chamadas contra o schema (só quando inequívoco).

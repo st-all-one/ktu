@@ -1,4 +1,5 @@
-//! `xtask gates` — gates da Fase 2 (**G10–G15**): usabilidade em cadeias extensas.
+//! `xtask gates` — gates das Fases 2 e 3 (**G10–G16**): usabilidade, recursos e
+//! interacção.
 //!
 //! Cada gate corre o `ktu` num espaço de trabalho isolado, verifica os critérios de
 //! aceitação de `wiki/implementation_phase2/GATES.md` e arquiva os artefactos em
@@ -9,9 +10,15 @@
 //! um guião que percorre uma tarefa real de código, pelo que provam a **mecânica** da
 //! cadeia longa sem depender de inferência (o modelo real é uma observação opcional).
 
+mod brakes;
+mod editing;
+mod migration;
 mod model;
 mod paths;
 mod project;
+mod repl;
+mod resources;
+mod steering;
 mod support;
 
 use std::fs;
@@ -116,7 +123,9 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     };
     fs::create_dir_all(&ctx.work).map_err(|error| format!("{}: {error}", ctx.work.display()))?;
     let mut gates: Vec<Gate> = Vec::new();
-    for id in ["G10", "G11", "G12", "G13", "G14", "G15"] {
+    for id in [
+        "G10", "G11", "G12", "G13", "G14", "G15", "G16", "G17", "G18", "G19", "G20", "G22",
+    ] {
         if !options.wants(id) {
             continue;
         }
@@ -164,6 +173,12 @@ fn run_one(id: &str, ctx: &Ctx, options: &Options) -> Result<Gate, String> {
         "G13" => paths::g13(ctx),
         "G14" => project::g14(ctx),
         "G15" => project::g15(ctx),
+        "G16" => steering::g16(ctx),
+        "G17" => repl::g17(ctx),
+        "G18" => resources::g18(ctx),
+        "G19" => editing::g19(ctx),
+        "G20" => migration::g20(ctx),
+        "G22" => brakes::g22(ctx),
         other => Err(format!("gate desconhecido: {other}")),
     }
 }

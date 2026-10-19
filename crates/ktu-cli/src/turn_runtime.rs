@@ -6,6 +6,7 @@
 //! [`ktu_core::facade::Ktu`] — aqui só se constroem os **adaptadores** reais.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use ktu_core::Error;
 use ktu_core::agent::{AgentRegistry, LoopConfig, Steering};
@@ -21,12 +22,13 @@ use ktu_core::ports::{Level, LogRecord, Logger, NoopMetrics};
 use ktu_core::session::SessionLog;
 use ktu_memory::JsonlMemory;
 use ktu_plugin::PluginHost;
-use ktu_tools::{StdFs, ToolThread, Toolbox, default_registry, plan_mode_spec};
+use ktu_tools::{FileMutationQueue, StdFs, ToolThread, Toolbox, default_registry, plan_mode_spec};
 
 use crate::clock::SystemClock;
 use crate::config_cmd::global_dir_path;
 use crate::embeddings;
 use crate::instructions::LocalInstructions;
+use crate::plugins_cmd;
 use crate::run::{RunConfig, build_provider};
 use crate::subagents::CliSubagents;
 
@@ -94,6 +96,7 @@ pub(crate) async fn execute_turn(
     logger: &dyn Logger,
     cancel: &CancelToken,
     steering: Option<&dyn Steering>,
+    mutations: &Arc<FileMutationQueue>,
 ) -> Result<StopReason, String> {
     let fs = StdFs;
     let clock = SystemClock::new();
@@ -114,6 +117,9 @@ pub(crate) async fn execute_turn(
         let root = root.to_path_buf();
         let session = config.session.label().to_owned();
         let memory_config = memory_config.clone();
+        // A fila é partilhada pelo **processo** (Arc clonado): a T2 vive num thread
+        // próprio, pelo que a fila tem de ser possuída por quem a usa.
+        let mutations = Arc::clone(mutations);
         move |ctx| {
             let fs = StdFs;
             let clock = SystemClock::new();
@@ -123,8 +129,8 @@ pub(crate) async fn execute_turn(
             if let Some(embedder) = &embedder {
                 memory = memory.with_embeddings(embedder, memory_config.embeddings.clone());
             }
-            let mut toolbox =
-                Toolbox::new(&root, &fs, &clock, Some(&memory)).with_deferred(deferred.clone());
+            let mut toolbox = Toolbox::new(&root, &fs, &clock, Some(&memory), &mutations)
+                .with_deferred(deferred.clone());
             if plan_mode {
                 toolbox = toolbox.with_plan(FsPlanHost::new(
                     &fs,
@@ -138,8 +144,10 @@ pub(crate) async fn execute_turn(
     .map_err(|error| format!("nao foi possivel iniciar a thread de tools: {error}"))?;
     let budget = BudgetGate::new(Ktu::CONTEXT_BUDGET_TOKENS);
     let metrics = NoopMetrics;
+    let user_dir = global_dir_path();
     // Plugins externos (§2.9): um manifesto inválido desactiva o plugin, não a sessão.
-    let plugins = PluginHost::load(root.join(".ktu").join("plugins"));
+    // Dois níveis (M8): o global do utilizador + o do projecto, aditivos.
+    let plugins = PluginHost::layered(plugins_cmd::levels(root));
     for error in plugins.errors() {
         logger.log(&LogRecord {
             level: Level::Warn,
@@ -148,7 +156,6 @@ pub(crate) async fn execute_turn(
             fields: &[("erro", error.as_str())],
         });
     }
-    let user_dir = global_dir_path();
     let system = system_prompt_in(&fs, root, user_dir.as_deref());
     let instructions = LocalInstructions::new(root);
     let subagents = CliSubagents::new(

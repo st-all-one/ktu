@@ -12,7 +12,7 @@ use ktu_core::guard::StructuralGuard;
 use ktu_core::memory::{Hint, Memory, MemoryDraft, MemoryResult, MemoryWrite};
 use ktu_core::plugin::{HookPayload, HookVerdict, Hooks, NoHooks};
 use ktu_core::ports::{FixedClock, MapInstructions, NoopMetrics, RecordingLogger, Timestamp};
-use ktu_core::session::{Event, SessionLog};
+use ktu_core::session::{Event, SessionLog, SteerMessage};
 use ktu_core::subagent::{SubagentHost, SubagentReport, SubagentRequest};
 use ktu_core::testing::{FakeProvider, FakeTools};
 use ktu_core::tools::ToolOutcome;
@@ -1218,19 +1218,28 @@ async fn declared_tool_calls_are_decoded_and_executed() {
 
 /// Fonte de *steering* de teste: devolve as mensagens dadas, uma só vez.
 struct FakeSteering {
-    messages: Mutex<Vec<String>>,
+    messages: Mutex<Vec<SteerMessage>>,
 }
 
 impl FakeSteering {
     fn new(messages: &[&str]) -> Self {
         Self {
-            messages: Mutex::new(messages.iter().map(|text| (*text).to_owned()).collect()),
+            messages: Mutex::new(
+                messages
+                    .iter()
+                    .enumerate()
+                    .map(|(index, text)| SteerMessage {
+                        id: format!("s{index}"),
+                        text: (*text).to_owned(),
+                    })
+                    .collect(),
+            ),
         }
     }
 }
 
 impl Steering for FakeSteering {
-    fn take(&self) -> Vec<String> {
+    fn take(&self) -> Vec<SteerMessage> {
         std::mem::take(&mut *self.messages.lock().unwrap_or_else(PoisonError::into_inner))
     }
 }
@@ -1272,17 +1281,118 @@ async fn steering_is_logged_and_delivered() {
     let reason = run_turn(&mut log, &deps, "sys", "faz", &LoopConfig::default()).await;
 
     assert_eq!(reason, StopReason::EndTurn);
-    // A mensagem é **logada** como `Steer` e entra no contexto do modelo.
+    // A mensagem é **admitida** (`SteerQueued`) e depois **entregue** (`Steer`) — M7.
+    let admitted = log
+        .events()
+        .iter()
+        .any(|event| matches!(event, Event::SteerQueued { text, .. } if text == "muda de plano"));
+    assert!(admitted, "admissao registada no log");
     let in_log = log
         .events()
         .iter()
-        .any(|event| matches!(event, Event::Steer { text } if text == "muda de plano"));
-    assert!(in_log);
+        .any(|event| matches!(event, Event::Steer { text, .. } if text == "muda de plano"));
+    assert!(in_log, "entrega registada no log");
+    // A admissão vem **antes** da entrega (durável antes de entrar no contexto).
+    let admitted_at = log.events().iter().position(
+        |event| matches!(event, Event::SteerQueued { text, .. } if text == "muda de plano"),
+    );
+    let delivered_at = log
+        .events()
+        .iter()
+        .position(|event| matches!(event, Event::Steer { text, .. } if text == "muda de plano"));
+    assert!(
+        admitted_at < delivered_at,
+        "admissao antes da entrega: {admitted_at:?} vs {delivered_at:?}"
+    );
+    assert_eq!(log.pending_steers(), Vec::new(), "nada fica pendente");
     let in_context = log
         .derive_messages()
         .iter()
         .any(|message| matches!(message, Message::User { content } if content == "muda de plano"));
     assert!(in_context, "model-visible <=> logged");
+    assert_eq!(log.verify(), Vec::new());
+}
+
+/// M7: uma admissão que fica pendente no fim de um turno é entregue no **turno seguinte**
+/// (o mesmo caminho que recupera uma admissão que sobreviveu a um *crash*).
+#[tokio::test]
+async fn a_pending_steer_is_delivered_in_the_next_turn() {
+    let provider = FakeProvider::new(vec![text_step("feito"), text_step("feito de novo")]);
+    let executor = tools(&[], Vec::new());
+    let guard = read_guard();
+    let budget = BudgetGate::new(100_000);
+    let logger = RecordingLogger::new();
+    let metrics = NoopMetrics;
+    let clock = FixedClock::new(Timestamp::from_millis(0));
+    let cancel = CancelToken::new();
+    let steering = FakeSteering::new(&["muda de plano"]);
+    let deps = Deps {
+        ports: Ports {
+            provider: &provider,
+            tools: &executor,
+            guard: &guard,
+            budget: &budget,
+            cancel: &cancel,
+        },
+        telemetry: Telemetry {
+            logger: &logger,
+            metrics: &metrics,
+            clock: &clock,
+        },
+        capabilities: Capabilities {
+            memory: None,
+            subagents: None,
+            plugins: None,
+            steering: Some(&steering),
+            instructions: None,
+        },
+    };
+    let mut log = SessionLog::new();
+
+    // Turno de **um** passo: a mensagem é admitida na única fronteira e fica pendente.
+    let reason = run_turn(&mut log, &deps, "sys", "faz", &LoopConfig::default()).await;
+    assert_eq!(reason, StopReason::EndTurn);
+    assert_eq!(log.pending_steers().len(), 1, "admissao fica pendente");
+    assert!(
+        !log.events()
+            .iter()
+            .any(|event| matches!(event, Event::Steer { .. })),
+        "sem entrega no mesmo turno"
+    );
+
+    // Turno seguinte (mesmo log): a pendente entra na **primeira** fronteira.
+    let deps = Deps {
+        ports: Ports {
+            provider: &provider,
+            tools: &executor,
+            guard: &guard,
+            budget: &budget,
+            cancel: &cancel,
+        },
+        telemetry: Telemetry {
+            logger: &logger,
+            metrics: &metrics,
+            clock: &clock,
+        },
+        capabilities: Capabilities {
+            memory: None,
+            subagents: None,
+            plugins: None,
+            steering: None,
+            instructions: None,
+        },
+    };
+    let reason = run_turn(&mut log, &deps, "sys", "continua", &LoopConfig::default()).await;
+    assert_eq!(reason, StopReason::EndTurn);
+    assert_eq!(log.pending_steers(), Vec::new(), "entregue uma vez");
+    let count = log
+        .derive_messages()
+        .iter()
+        .filter(
+            |message| matches!(message, Message::User { content } if content == "muda de plano"),
+        )
+        .count();
+    assert_eq!(count, 1, "entra no contexto uma so vez");
     assert_eq!(log.verify(), Vec::new());
 }
 

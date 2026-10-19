@@ -1,0 +1,3 @@
+check-links: 3 links relativos, 0 avisos
+xtask: links quebrados:
+  /home/one/projects/one/ktu/.ktu/gates/g22/ensaio/wiki/index.md → nao-existe.md

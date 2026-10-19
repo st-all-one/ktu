@@ -15,7 +15,8 @@ use ktu_core::plan::Mode;
 use ktu_core::ports::Logger;
 use ktu_core::provider::Provider;
 use ktu_provider::{Flavor, LlamaConfig, LlamaProvider, ReasoningEffort};
-use ktu_tools::StdFs;
+use ktu_tools::{FileMutationQueue, StdFs};
+use std::sync::Arc;
 use tokio::runtime::Builder;
 
 use crate::clock::SystemClock;
@@ -75,7 +76,8 @@ pub(crate) fn resolve_prompt(words: &[String]) -> Result<String, String> {
 
 /// Corre um turno e imprime a resposta final em `stdout`.
 pub(crate) fn run(root: &Path, prompt: &str, logger: &dyn Logger, config: &RunConfig) -> ExitCode {
-    let (ok, text) = run_capture(root, prompt, logger, config);
+    let mutations = Arc::new(FileMutationQueue::new());
+    let (ok, text) = run_capture(root, prompt, logger, config, &mutations);
     if let Some(content) = text {
         let mut stdout = io::stdout().lock();
         let _ignored = writeln!(stdout, "{content}");
@@ -95,6 +97,7 @@ pub(crate) fn run_capture(
     prompt: &str,
     logger: &dyn Logger,
     config: &RunConfig,
+    mutations: &Arc<FileMutationQueue>,
 ) -> (bool, Option<String>) {
     let runtime = match Builder::new_current_thread().enable_all().build() {
         Ok(runtime) => runtime,
@@ -103,7 +106,7 @@ pub(crate) fn run_capture(
             return (false, None);
         }
     };
-    runtime.block_on(drive(root, prompt, logger, config))
+    runtime.block_on(drive(root, prompt, logger, config, mutations))
 }
 
 /// Constrói o provider pedido (real ou de demonstração).
@@ -169,6 +172,7 @@ async fn drive(
     prompt: &str,
     logger: &dyn Logger,
     config: &RunConfig,
+    mutations: &Arc<FileMutationQueue>,
 ) -> (bool, Option<String>) {
     if let Err(message) = ensure_layout(root) {
         report_error(&message);
@@ -205,7 +209,11 @@ async fn drive(
         log.set_mode(Mode::Plan);
     }
     let cancel = CancelToken::new();
-    let reason = match execute_turn(root, &mut log, prompt, config, logger, &cancel, None).await {
+    let reason = match execute_turn(
+        root, &mut log, prompt, config, logger, &cancel, None, mutations,
+    )
+    .await
+    {
         Ok(reason) => reason,
         Err(message) => {
             report_error(&message);

@@ -1,4 +1,5 @@
-//! `ktu memory` e `ktu doctor --memory`: vistas e saúde da memória (§2.7).
+//! `ktu memory`: vistas e saúde da memória (§2.7) — `export`, `list`, `project`,
+//! `drain` e `doctor`.
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -46,32 +47,61 @@ pub(crate) fn export(root: &Path, format: Format) -> ExitCode {
     }
 }
 
-/// `ktu memory list`: uma linha por nota (`id`, tipo e afirmação).
-pub(crate) fn list(root: &Path, format: Format) -> ExitCode {
+/// Uma linha do `list`: identificador, tipo e afirmação.
+type Row = (String, String, String);
+
+/// Linhas do `list`: `(id, tipo, afirmação)` por nota.
+fn rows(root: &Path) -> Result<Vec<Row>, String> {
     let fs = StdFs;
     let clock = SystemClock::new();
     let memory = memory(&fs, &clock, root);
-    match memory.load_notes() {
-        Ok(notes) => {
-            let rows: Vec<(String, String, String)> = notes
-                .iter()
-                .map(|note| {
-                    let id = note.id().unwrap_or("").to_owned();
-                    let kind = note
-                        .frontmatter
-                        .get("type")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or("nota")
-                        .to_owned();
-                    let statement = note.frontmatter.statement().unwrap_or("").to_owned();
-                    (id, kind, statement)
-                })
-                .collect();
-            let text = rows
-                .iter()
-                .map(|(id, kind, statement)| format!("{id}\t{kind}\t{statement}"))
-                .collect::<Vec<_>>()
-                .join("\n");
+    let notes = memory
+        .load_notes()
+        .map_err(|error| format!("nao foi possivel ler a memoria: {error}"))?;
+    Ok(notes
+        .iter()
+        .map(|note| {
+            let id = note.id().unwrap_or("").to_owned();
+            let kind = note
+                .frontmatter
+                .get("type")
+                .and_then(|value| value.as_str())
+                .unwrap_or("nota")
+                .to_owned();
+            let statement = note.frontmatter.statement().unwrap_or("").to_owned();
+            (id, kind, statement)
+        })
+        .collect())
+}
+
+/// Texto do `list` (uma linha por nota) — reutilizado pelo REPL (`/memory`).
+///
+/// # Errors
+/// Devolve mensagem legível se a memória não carregar.
+pub(crate) fn list_text(root: &Path) -> Result<String, String> {
+    let rows = rows(root)?;
+    if rows.is_empty() {
+        return Ok("sem notas".to_owned());
+    }
+    Ok(rows
+        .iter()
+        .map(|(id, kind, statement)| format!("{id}\t{kind}\t{statement}"))
+        .collect::<Vec<_>>()
+        .join("\n"))
+}
+
+/// `ktu memory list`: uma linha por nota (`id`, tipo e afirmação).
+pub(crate) fn list(root: &Path, format: Format) -> ExitCode {
+    match rows(root) {
+        Ok(rows) => {
+            let text = if rows.is_empty() {
+                "sem notas".to_owned()
+            } else {
+                rows.iter()
+                    .map(|(id, kind, statement)| format!("{id}\t{kind}\t{statement}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
             let data: Vec<serde_json::Value> = rows
                 .iter()
                 .map(|(id, kind, statement)| {
@@ -86,13 +116,8 @@ pub(crate) fn list(root: &Path, format: Format) -> ExitCode {
             );
             ExitCode::SUCCESS
         }
-        Err(error) => {
-            output::emit_error(
-                format,
-                "memory list",
-                "io",
-                &format!("nao foi possivel ler a memoria: {error}"),
-            );
+        Err(message) => {
+            output::emit_error(format, "memory list", "io", &message);
             ExitCode::FAILURE
         }
     }
@@ -246,7 +271,7 @@ fn semantic_line(fs: StdFs, root: &Path, memory: &JsonlMemory<'_>) -> String {
     }
 }
 
-/// `ktu doctor --memory`: âncoras quebradas e saúde do índice.
+/// `ktu memory doctor`: âncoras quebradas e saúde do índice (read-only).
 pub(crate) fn doctor(root: &Path, format: Format) -> ExitCode {
     let fs = StdFs;
     let clock = SystemClock::new();
@@ -276,7 +301,7 @@ pub(crate) fn doctor(root: &Path, format: Format) -> ExitCode {
                 "broken_anchors": anchors,
                 "healthy": report.is_healthy(),
             });
-            output::emit(format, "doctor memory", &lines.join("\n"), &data);
+            output::emit(format, "memory doctor", &lines.join("\n"), &data);
             if report.is_healthy() {
                 ExitCode::SUCCESS
             } else {
@@ -286,7 +311,7 @@ pub(crate) fn doctor(root: &Path, format: Format) -> ExitCode {
         Err(error) => {
             output::emit_error(
                 format,
-                "doctor memory",
+                "memory doctor",
                 "io",
                 &format!("nao foi possivel diagnosticar a memoria: {error}"),
             );

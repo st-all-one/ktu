@@ -88,6 +88,7 @@ extend-exclude = ["REF/", "crates/knudge/", "wiki/", ".knudge/", ".agents/", "mo
     "prefere" = "prefere"
     "problemas" = "problemas"
     "processos" = "processos"
+    "protocolos" = "protocolos"
     "progresso" = "progresso"
     "projecto" = "projecto"
     "ratatui" = "ratatui"

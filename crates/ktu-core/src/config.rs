@@ -4,12 +4,29 @@
 //! a global. A resolução é **pura** (global + local → efectiva); a leitura e a
 //! escrita de ficheiros ficam na borda. As credenciais vivem **só** no global
 //! (`auth.toml`, 0600) e nunca entram no log nem no contexto do modelo.
+//!
+//! # Schema e migrações (F5)
+//!
+//! O documento declara a sua versão (`schema = 1`); a **ausência** significa **v0**
+//! (o formato anterior, sem versão). A migração tem duas variantes de propósito:
+//!
+//! - [`read_migrate`] — **leitura**: devolve o documento na versão actual **em
+//!   memória** e **nunca remove chaves** (outro chamador pode ainda consultá-las);
+//! - [`migrate`] — **escrita**: o documento a persistir; pode **remover** as chaves
+//!   que um passo declare obsoletas (hoje nenhuma) e diz se mudou algo
+//!   (idempotência: correr duas vezes ⇒ `false`).
+//!
+//! Uma versão **futura** (`schema = 3` num binário v2) é **fail-closed**: erro
+//! legível e nenhuma escrita — nunca se "migra para trás" sobre um ficheiro que não
+//! se sabe ler.
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use toml::Table;
+use toml::Value;
 
 /// Nome do ficheiro de configuração de comportamento.
 pub const CONFIG_FILE: &str = "config.toml";
@@ -17,6 +34,13 @@ pub const CONFIG_FILE: &str = "config.toml";
 pub const AUTH_FILE: &str = "auth.toml";
 /// Nome do subdirectório de configuração global.
 pub const GLOBAL_DIR: &str = "ktu";
+
+/// Versão **actual** do schema de configuração.
+pub const SCHEMA: u32 = 1;
+/// Chave que declara a versão do schema no TOML.
+pub const SCHEMA_KEY: &str = "schema";
+/// Chave cujo formato mudou no v1 (string CSV → lista).
+const DEFERRED_TOOLS: &str = "deferred_tools";
 
 /// Chaves conhecidas do config, por ordem estável.
 pub const KEYS: &[&str] = &[
@@ -32,6 +56,9 @@ pub const KEYS: &[&str] = &[
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
+    /// Versão do schema declarada no ficheiro (`None` ⇒ v0).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema: Option<u32>,
     /// Provider (`llama`|`opencode-go`|`mock`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
@@ -69,10 +96,21 @@ impl Config {
         toml::to_string(self).map_err(|error| format!("config nao serializavel: {error}"))
     }
 
+    /// Interpreta uma tabela TOML **já migrada** (chaves fechadas).
+    ///
+    /// # Errors
+    /// Devolve mensagem legível se uma chave for desconhecida ou tiver o tipo errado.
+    pub fn from_table(table: Table) -> Result<Self, String> {
+        Value::Table(table)
+            .try_into()
+            .map_err(|error| format!("config invalida: {error}"))
+    }
+
     /// Funde `local` sobre `global`, chave a chave (o projecto ganha — M6).
     #[must_use]
     pub fn merge(local: Self, global: Self) -> Self {
         Self {
+            schema: local.schema.or(global.schema),
             provider: local.provider.or(global.provider),
             base_url: local.base_url.or(global.base_url),
             model: local.model.or(global.model),
@@ -154,6 +192,13 @@ impl Config {
     }
 }
 
+pub use migrate::{migrate, read_migrate, schema_of, table};
+
+mod migrate;
+
+#[cfg(test)]
+mod tests;
+
 /// Credenciais de providers (fonte: `auth.toml`, só global, 0600).
 ///
 /// O `Debug` é **redigido** (M3): nunca imprime as chaves.
@@ -214,100 +259,4 @@ pub fn global_auth_path(xdg: Option<&str>, home: Option<&str>) -> Option<PathBuf
 #[must_use]
 pub fn local_config_path(root: &Path) -> PathBuf {
     root.join(".agents").join(CONFIG_FILE)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use super::{
-        Auth, Config, global_auth_path, global_config_path, global_dir, local_config_path,
-    };
-
-    #[test]
-    fn parse_rejects_unknown_keys() {
-        assert!(Config::parse("provider = \"mock\"\n").is_ok());
-        assert!(Config::parse("nope = 1\n").is_err());
-    }
-
-    #[test]
-    fn local_wins_key_by_key_over_global() {
-        let global = Config {
-            provider: Some("llama".to_owned()),
-            model: Some("global-model".to_owned()),
-            ..Config::default()
-        };
-        let local = Config {
-            model: Some("local-model".to_owned()),
-            effort: Some("high".to_owned()),
-            ..Config::default()
-        };
-        let effective = Config::merge(local, global);
-        assert_eq!(effective.provider.as_deref(), Some("llama"));
-        assert_eq!(effective.model.as_deref(), Some("local-model"));
-        assert_eq!(effective.effort.as_deref(), Some("high"));
-    }
-
-    #[test]
-    fn set_unset_get_roundtrip() {
-        let mut config = Config::default();
-        assert!(config.set("provider", "mock").is_ok());
-        assert!(config.set("max_steps", "3").is_ok());
-        assert_eq!(config.get("provider").as_deref(), Some("mock"));
-        assert_eq!(config.get("max_steps").as_deref(), Some("3"));
-        assert!(config.set("max_steps", "muitos").is_err());
-        assert!(config.unset("provider").is_ok());
-        assert_eq!(config.get("provider"), None);
-        assert!(config.set("desconhecida", "x").is_err());
-    }
-
-    #[test]
-    fn render_omits_undefined_keys() {
-        let mut config = Config::default();
-        assert!(config.set("model", "m").is_ok());
-        let text = config.render().unwrap_or_default();
-        assert!(text.contains("model = \"m\""));
-        assert!(!text.contains("provider"));
-    }
-
-    #[test]
-    fn global_dir_prefers_xdg_then_home() {
-        assert_eq!(
-            global_dir(Some("/xdg"), Some("/home/u")),
-            Some(PathBuf::from("/xdg/ktu"))
-        );
-        assert_eq!(
-            global_dir(None, Some("/home/u")),
-            Some(PathBuf::from("/home/u/.config/ktu"))
-        );
-        assert_eq!(global_dir(Some(""), Some("")), None);
-        assert_eq!(global_config_path(None, None), None);
-        assert_eq!(
-            global_auth_path(Some("/xdg"), None),
-            Some(PathBuf::from("/xdg/ktu/auth.toml"))
-        );
-    }
-
-    #[test]
-    fn local_path_lives_in_agents() {
-        assert_eq!(
-            local_config_path(&PathBuf::from("/proj")),
-            PathBuf::from("/proj/.agents/config.toml")
-        );
-    }
-
-    #[test]
-    fn auth_reads_provider_key() {
-        let auth = Auth::parse("[providers]\nopencode-go = \"sk-x\"\n").unwrap_or_default();
-        assert_eq!(auth.api_key("opencode-go"), Some("sk-x"));
-        assert_eq!(auth.api_key("llama"), None);
-    }
-
-    #[test]
-    fn auth_debug_never_leaks_the_key() {
-        let auth = Auth::parse("[providers]\nopencode-go = \"sk-secret\"\n").unwrap_or_default();
-        let rendered = format!("{auth:?}");
-        assert!(rendered.contains("opencode-go"));
-        assert!(!rendered.contains("sk-secret"), "a chave nao pode aparecer");
-    }
 }

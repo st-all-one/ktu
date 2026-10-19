@@ -7,22 +7,25 @@ use ktu_core::agent::Steering;
 use ktu_core::cancel::CancelToken;
 use ktu_core::domain::StopReason;
 use ktu_core::plan::{Approval, Mode};
-use ktu_core::session::SessionLog;
+use ktu_core::session::{SessionLog, SteerMessage};
 use ktu_core::store;
 use ktu_port::protocol::{PortError, ServerMsg, SessionState};
 use ktu_tools::StdFs;
 use tokio::sync::{mpsc, oneshot};
 
 use super::{Handle, Inner};
+use crate::clock::SystemClock;
+use crate::session_mode::force_compaction;
+use crate::session_store;
 use crate::turn_runtime::execute_turn;
 
 /// Adaptador da fila de *steering* do [`Handle`] para a porta `Steering` do kernel.
 struct HandleSteering {
-    buffer: Arc<Mutex<Vec<String>>>,
+    buffer: Arc<Mutex<Vec<SteerMessage>>>,
 }
 
 impl Steering for HandleSteering {
-    fn take(&self) -> Vec<String> {
+    fn take(&self) -> Vec<SteerMessage> {
         let mut guard = Handle::lock(&self.buffer);
         std::mem::take(&mut *guard)
     }
@@ -50,6 +53,11 @@ pub(crate) enum Cmd {
     State {
         /// Estado observável.
         reply: oneshot::Sender<Result<SessionState, PortError>>,
+    },
+    /// Força a compactação do contexto e persiste (o `/compact` do REPL).
+    Compact {
+        /// Confirmação.
+        reply: oneshot::Sender<Result<(), PortError>>,
     },
 }
 
@@ -96,11 +104,20 @@ pub(crate) async fn run_actor(
                 }
                 let _ignored = reply.send(result.map(|_| ()));
             }
+            Cmd::Compact { reply } => {
+                if handle.is_pending() {
+                    let _ignored = reply.send(Err(busy_error()));
+                    continue;
+                }
+                compact(&inner, &session_id, &mut log, &handle);
+                let _ignored = reply.send(Ok(()));
+            }
             Cmd::State { reply } => {
                 let state = SessionState {
                     session_id: session_id.clone(),
                     mode,
                     pending: handle.is_pending(),
+                    keep_from: log.compaction_from(),
                     log: log.events().to_vec(),
                 };
                 let _ignored = reply.send(Ok(state));
@@ -166,6 +183,7 @@ async fn run_turn(
         inner.logger.as_ref(),
         &token,
         Some(&steering),
+        &inner.mutations,
     )
     .await;
     handle.install_cancel(None);
@@ -184,6 +202,19 @@ async fn run_turn(
     };
     handle.send_event(ServerMsg::TurnFinished { reason });
     persist(inner, session_id, log, handle);
+}
+
+/// Aplica a compactação forçada e persiste **log e checkpoint** (o `/compact` do REPL).
+///
+/// O log cru fica intacto (fonte da verdade); o corte vive no checkpoint, para que
+/// retomar a sessão mantenha a compactação.
+fn compact(inner: &Arc<Inner>, session_id: &str, log: &mut SessionLog, handle: &Handle) {
+    force_compaction(log);
+    persist(inner, session_id, log, handle);
+    let fs = StdFs;
+    let clock = SystemClock::new();
+    let dir = inner.root.join(".ktu").join("sessions");
+    session_store::save_checkpoint_for(&fs, &dir, session_id, log, &clock);
 }
 
 /// Grava o log de forma durável; uma falha degrada para o stream de eventos.

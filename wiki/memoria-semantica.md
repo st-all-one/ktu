@@ -135,7 +135,7 @@ worker copia-se para `~/.local/bin/ktu-idle`).
 | `--uninstall` | remove unidades + worker; `--keep-model` (*default*) preserva o GGUF, `--remove-model` move-o para o **trash** (recuperável; nunca `rm`) |
 | `--dry-run` | só mostra o plano (não descarrega nem escreve) |
 
-O canal é **incentivado, não exigido**: o `ktu prime` e o `ktu doctor --memory` dizem que está
+O canal é **incentivado, não exigido**: o `ktu prime` e o `ktu memory doctor` dizem que está
 lexical e apontam `ktu memory drain service --install`; nada falha por não o fazer.
 
 Período `--every 1h`, porta `--port 8889`, modelo `google/embeddinggemma-2`

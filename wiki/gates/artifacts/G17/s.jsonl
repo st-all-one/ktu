@@ -1,0 +1,20 @@
+{"event":"plugin_dispatch","hook":"session.start","generation":1,"allowed":true,"reason":null}
+{"event":"plugin_dispatch","hook":"user.input","generation":1,"allowed":true,"reason":null}
+{"event":"turn_start","prompt":"ola"}
+{"event":"plugin_dispatch","hook":"model.request","generation":1,"allowed":true,"reason":null}
+{"event":"plugin_dispatch","hook":"model.output","generation":1,"allowed":true,"reason":null}
+{"event":"assistant","content":"","reasoning":"","tool_calls":[{"id":"f1-0","name":"read_file","arguments":"{\"path\":\"tools.\"}"}]}
+{"event":"tool_result","tool_call_id":"f1-0","name":"read_file","content":"sem execucao: limite de passos","is_error":true}
+{"event":"turn_end","reason":"max_steps"}
+{"event":"plugin_dispatch","hook":"session.end","generation":1,"allowed":true,"reason":null}
+{"event":"plugin_dispatch","hook":"user.input","generation":1,"allowed":true,"reason":null}
+{"event":"turn_start","prompt":"ola"}
+{"event":"plugin_dispatch","hook":"model.request","generation":1,"allowed":true,"reason":null}
+{"event":"plugin_dispatch","hook":"model.output","generation":1,"allowed":true,"reason":null}
+{"event":"assistant","content":"","reasoning":"","tool_calls":[{"id":"f1-0","name":"read_file","arguments":"{\"path\":\"AGENTS.md\"}"}]}
+{"event":"plugin_dispatch","hook":"action.before","generation":1,"allowed":true,"reason":null}
+{"event":"guard_decision","tool":"read_file","allowed":true,"reason":"allow"}
+{"event":"plugin_dispatch","hook":"guard.decision","generation":1,"allowed":true,"reason":null}
+{"event":"tool_result","tool_call_id":"f1-0","name":"read_file","content":"cancelado pelo utilizador","is_error":true}
+{"event":"turn_end","reason":"cancelled"}
+{"event":"plugin_dispatch","hook":"session.end","generation":1,"allowed":true,"reason":null}

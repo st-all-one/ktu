@@ -115,6 +115,9 @@ pub struct SessionState {
     pub mode: Mode,
     /// `true` se há um turno em curso.
     pub pending: bool,
+    /// Corte de compactação do contexto (`None` = contexto completo): índice do primeiro
+    /// evento que a projecção mantém. Vive no *checkpoint*, não no log (que fica intacto).
+    pub keep_from: Option<usize>,
     /// Log append-only completo (a verdade da sessão — I3).
     pub log: Vec<Event>,
 }

@@ -37,7 +37,7 @@ thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # assíncrono (dois runtimes current_thread — §2.2)
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "time", "net", "io-util", "process"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "time", "net", "io-util", "process", "signal"] }
 async-trait = "0.1"
 futures = "0.3"
 # HTTP do provider built-in (§2.5) — sem TLS (llama-server é local)

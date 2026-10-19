@@ -1,0 +1,1 @@
+{"success":true,"command":"config doctor","data":{"levels":[{"error":null,"level":"local","migrates":true,"path":"/home/one/projects/one/ktu/.ktu/gates/g20/.agents/config.toml","schema":0},{"error":null,"level":"global","migrates":true,"path":"/home/one/projects/one/ktu/.ktu/gates/g20/xdg/ktu/config.toml","schema":0}],"scope":"effective"}}

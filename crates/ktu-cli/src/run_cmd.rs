@@ -7,10 +7,10 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use ktu_core::command::{self, Command as Recipe};
-use ktu_core::layout::COMMANDS_DIR;
 use ktu_tools::StdFs;
 
 use crate::cli::Command;
+use crate::config_cmd::global_dir_path;
 use crate::output::{self, Format};
 use crate::{
     batch, command_run, config_cmd, logging, params, provider_defaults, root_or_cwd, run,
@@ -184,7 +184,11 @@ pub(crate) fn dispatch_run(
 /// Resolve um comando do projecto pelo nome (erro accionável com a lista).
 fn resolve_command(root: &Path, name: &str) -> Result<Recipe, String> {
     let fs = StdFs;
-    let (commands, _problems) = command::load(&fs, &root.join(COMMANDS_DIR));
+    let (layered, _problems) = command::load_layered(&fs, global_dir_path().as_deref(), root);
+    let commands: Vec<Recipe> = layered
+        .into_iter()
+        .map(|(_origin, recipe)| recipe)
+        .collect();
     if let Some(found) = command::find(&commands, name) {
         return Ok(found.clone());
     }

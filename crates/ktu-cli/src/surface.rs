@@ -91,11 +91,10 @@ fn builtin_tools() -> usize {
     let fs = StdFs;
     let clock = SystemClock::new();
     let memory = JsonlMemory::new(&fs, &clock, &root, root.join(".agents").join("memory"));
-    let toolbox = Toolbox::new(&root, &fs, &clock, Some(&memory)).with_plan(FsPlanHost::new(
-        &fs,
-        root.join(".ktu").join("plan"),
-        "surface",
-    ));
+    let mutations = ktu_tools::FileMutationQueue::new();
+    let toolbox = Toolbox::new(&root, &fs, &clock, Some(&memory), &mutations).with_plan(
+        FsPlanHost::new(&fs, root.join(".ktu").join("plan"), "surface"),
+    );
     let mut names: BTreeSet<String> = toolbox.specs().into_iter().map(|spec| spec.name).collect();
     // Tools que o **loop** acrescenta ao catálogo, fora do `Toolbox`: uma tool nova
     // neste nível tem de ser contada aqui (e o teto subido).

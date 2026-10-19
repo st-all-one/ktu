@@ -7,7 +7,7 @@ use ktu_core::domain::{ToolCall, ToolCallId};
 use ktu_core::plan::{self, FsPlanHost};
 use ktu_core::ports::{FixedClock, Fs, MemFs, Timestamp};
 use ktu_core::tools::{ScopedTools, ToolExecutor};
-use ktu_tools::{Toolbox, plan_mode_spec};
+use ktu_tools::{FileMutationQueue, Toolbox, plan_mode_spec};
 
 fn call(name: &str, arguments: &str) -> ToolCall {
     ToolCall {
@@ -24,7 +24,8 @@ async fn plan_mode_denies_writes_and_persists_the_plan() {
     let root = PathBuf::from("/r");
     let plan_dir = root.join(".ktu").join("plan");
     let host = FsPlanHost::new(&fs, &plan_dir, "s1");
-    let toolbox = Toolbox::new(&root, &fs, &clock, None).with_plan(host);
+    let mutations = FileMutationQueue::new();
+    let toolbox = Toolbox::new(&root, &fs, &clock, None, &mutations).with_plan(host);
     let spec = plan_mode_spec();
     let scoped = ScopedTools::new(&toolbox, spec.tool_names());
 
@@ -61,7 +62,8 @@ async fn deferred_tools_leave_the_catalog_but_stay_executable() {
     let fs = MemFs::new();
     let clock = FixedClock::new(Timestamp::from_millis(0));
     let root = PathBuf::from("/r");
-    let toolbox = Toolbox::new(&root, &fs, &clock, None)
+    let mutations = FileMutationQueue::new();
+    let toolbox = Toolbox::new(&root, &fs, &clock, None, &mutations)
         .with_deferred(["glob".to_owned(), "grep".to_owned()]);
 
     let declared: Vec<String> = toolbox.specs().into_iter().map(|spec| spec.name).collect();

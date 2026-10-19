@@ -129,7 +129,8 @@ fn slash_plan_changes_the_mode() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn a_line_during_a_turn_is_delivered_as_steering() -> Result<(), Box<dyn std::error::Error>> {
+fn a_line_during_a_turn_is_admitted_and_delivered_next_time()
+-> Result<(), Box<dyn std::error::Error>> {
     let root = fresh_root("steer");
     fs::create_dir_all(&root)?;
     let opened = ktu(
@@ -139,7 +140,24 @@ fn a_line_during_a_turn_is_delivered_as_steering() -> Result<(), Box<dyn std::er
     )?;
     assert!(opened.status.success());
     let log = fs::read_to_string(root.join(".ktu/sessions/s.jsonl"))?;
-    assert!(log.contains("\"steer\""), "{log}");
+    // M7: a linha é **admitida** (durável no log) com o id da borda.
+    assert!(log.contains("\"event\":\"steer_queued\""), "{log}");
+    assert!(log.contains("repl-1"), "{log}");
+    assert!(
+        !log.contains("\"event\":\"steer\""),
+        "a entrega e no turno seguinte: {log}"
+    );
+
+    // Segundo arranque na **mesma** sessão: a admissão pendente entra na primeira fronteira.
+    let reopened = ktu(
+        &root,
+        &["session", "s", "--provider", "mock", "--max-steps", "4"],
+        "continua\n/quit\n",
+    )?;
+    assert!(reopened.status.success());
+    let log = fs::read_to_string(root.join(".ktu/sessions/s.jsonl"))?;
+    assert!(log.contains("\"event\":\"steer\""), "{log}");
+    assert!(log.contains("faz antes X"), "{log}");
     let _ignored = fs::remove_dir_all(&root);
     Ok(())
 }

@@ -1,0 +1,2 @@
+check-links: aviso: /home/one/projects/one/ktu/.ktu/gates/g22/ensaio/wiki/index.md → guia.md#seccao-que-nao-existe (ancora `#seccao-que-nao-existe` nao encontrada)
+check-links: 2 links relativos, 1 avisos

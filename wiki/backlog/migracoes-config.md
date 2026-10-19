@@ -1,6 +1,8 @@
 # Migrações de configuração
 
-- **Estado:** candidata (do `goose`) — **incorporar**.
+- **Estado:** **incorporada** (F5, gate G20) — `crates/ktu-core/src/config/migrate.rs`: `schema = 1`,
+  `read_migrate` (leitura não destrutiva) + `migrate` (escrita idempotente), fail-closed em versão
+  futura e `ktu config doctor`; decisão na [ADR 0020](../adr/0020-schema-de-config-versionado-com-leitura-nao-destrutiva.md).
 - **Origem:** `REF/goose/crates/goose/src/config/migrations.rs`;
   `wiki/revisao-goose-profunda.md` §1.5.
 - **Âncora:** `crates/ktu-cli/src/init.rs` (e o loader de config, se adotado — [76](./config-precedencia.md)).

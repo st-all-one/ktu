@@ -224,7 +224,8 @@ async fn turn(args: &Args) -> Result<(), String> {
         move |ctx| {
             let fs = StdFs;
             let clock = SystemClock::new();
-            let mut toolbox = Toolbox::new(&root, &fs, &clock, None);
+            let mutations = ktu_tools::FileMutationQueue::new();
+            let mut toolbox = Toolbox::new(&root, &fs, &clock, None, &mutations);
             if plan_mode {
                 toolbox = toolbox.with_plan(ktu_core::plan::FsPlanHost::new(
                     &fs,

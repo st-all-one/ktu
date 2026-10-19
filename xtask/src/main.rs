@@ -4,12 +4,14 @@
 //! - `check-layers`: impõe o firewall de dependências entre camadas (§2.1 do `plan.md`).
 //! - `check-adr`: valida os registos de governança (`wiki/adr/`, `wiki/postmortems/`).
 //! - `check-surface`: impõe o teto de superfície pública (`surface.toml`).
+//! - `check-links`: verifica os links internos da wiki (`README.md`, `STAGING.md`, `plan.md`).
 //! - `gates`: corre os gates da Fase 2 (G10–G15) e arquiva os artefactos.
 //! - `quality`: corre a bateria de qualidade `p1`–`p4` com o ktu isolado (F5/G4).
 #![forbid(unsafe_code)]
 
 mod gates;
 mod governance;
+mod links;
 mod quality;
 mod surface;
 
@@ -26,13 +28,14 @@ fn main() -> ExitCode {
         Some("check-layers") => check_layers(),
         Some("check-adr") => governance::check(),
         Some("check-surface") => surface::check(),
+        Some("check-links") => links::check(args.get(1..).unwrap_or(&[])),
         Some("gates") => gates::run(args.get(1..).unwrap_or(&[])),
         Some("quality") => quality::run(args.get(1..).unwrap_or(&[])),
         Some(other) => Err(format!(
-            "alvo desconhecido: `{other}` (disponíveis: check-adr, check-layers, check-surface, gates, quality)"
+            "alvo desconhecido: `{other}` (disponíveis: check-adr, check-layers, check-links, check-surface, gates, quality)"
         )),
         None => Err(
-            "alvo ausente (disponíveis: check-adr, check-layers, check-surface, quality)"
+            "alvo ausente (disponíveis: check-adr, check-layers, check-links, check-surface, quality)"
                 .to_owned(),
         ),
     };

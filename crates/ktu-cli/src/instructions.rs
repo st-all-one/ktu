@@ -3,7 +3,7 @@
 //! Quando o modelo lê `sub/x.md`, as instruções de `sub/` (e, na falta, as dos
 //! pais até à raiz) são anexadas ao resultado — uma vez por turno e por fonte.
 //! É leitura pela porta `Fs`, com a resolução pura de
-//! [`agents_md::nearest`](ktu_core::agents_md::nearest).
+//! [`agents_md::nearest`].
 
 use std::path::PathBuf;
 

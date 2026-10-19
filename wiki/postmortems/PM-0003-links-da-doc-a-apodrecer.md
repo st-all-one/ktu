@@ -29,8 +29,10 @@ script de resolução de links relativos).
 - Os registos de governança (`wiki/adr/`, `wiki/postmortems/`) passam a ter **gate próprio**
   (`xtask check-adr` no `make check`): id, secções obrigatórias, substituição coerente e índice sem
   deriva.
-- A wiki continua a não ter verificação de links no portão — está no dossiê
-  ([`⚪ Formalismo`](../pendencias.md)) com o critério de reabertura: um link quebrado que chegue a
-  um leitor, ou a promoção do `cargo doc` a gate (que traria a verificação de links Rust).
+- A wiki **passou a ter** verificação de links no portão: `xtask check-links` (dentro do
+  `make check`, alvo `links`) resolve os destinos relativos de `wiki/**` + `README.md` +
+  `STAGING.md` + `plan.md`; o `cargo doc` com `RUSTDOCFLAGS="-D warnings"` cobre os links
+  *intra-doc* do Rust. O critério de reabertura desta prevenção cumpriu-se na **F7** (gate G22) —
+  ver [`G22`](../gates/G22-travoes.md).
 - Regra de escrita: ao mover/renomear um ficheiro da wiki, procurar quem o cita
   (`grep -rn "<nome>" wiki/`) na mesma alteração.

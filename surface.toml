@@ -9,10 +9,22 @@
 # Regra de poda (M1): subir o teto obriga a dizer **que consumidor** a superfície nova serve.
 #
 # Histórico das subidas:
+# - 2026-10-18 (diagnóstico): subcomandos 50 → 51 — `ktu memory doctor` (o diagnóstico
+#   da memória passa a ter porta própria na área da memória; o `--memory` do `doctor`
+#   sai e o `ktu doctor` passa a diagnosticar o **projecto**). As flags não mudam
+#   (entra o `--root` do `memory doctor`, sai o `--memory`). Consumidor: a memória é o
+#   eixo que o utilizador precisa de diagnosticar (`ktu memory doctor`), e o `doctor`
+#   prometia «layout e conhecimento» mas corria o diagnóstico do provider.
+# - 2026-10-18 (F5): subcomandos 49 → 50 — `ktu config doctor` (o schema de cada
+#   nível e se migraria, sem escrever), consumidor: F5 (L3 do dossiê: uma config
+#   antiga não pode migrar em silêncio nem corromper; ver `wiki/pendencias.md` D2).
+# - 2026-10-18 (F3): subcomandos 47 → 49 e flags 88 → 89 — `ktu skills ls` (+ o `--root`
+#   das listagens), consumidor: M8 (o piso visível — as skills compõem o prompt e não
+#   tinham `ls`; ver `wiki/implementation_phase3/F3-recursos-globais.md`).
 # - 2026-10-18 (H12): flags 87 → 88 — `ktu run --script <ficheiro>` (guião do `--provider
 #   scripted`), consumidor: os gates G10/G11 (ver `wiki/adr/0018-*.md`).
 
 [ceiling]
-subcommands = 47
-flags = 88
+subcommands = 51
+flags = 89
 tools = 13

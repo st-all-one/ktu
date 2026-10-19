@@ -86,6 +86,12 @@ pub(crate) fn emit_error(format: Format, command: &str, code: &str, message: &st
     }
 }
 
+/// Escreve um **aviso** em `stderr` (log): `stdout` é só dados.
+pub(crate) fn warn(message: &str) {
+    let mut stderr = io::stderr().lock();
+    let _ignored = writeln!(stderr, "ktu: {message}");
+}
+
 /// Serializa um valor para `stdout` como uma linha JSON.
 fn print_json<T: Serialize>(value: &T) {
     let stdout = io::stdout();

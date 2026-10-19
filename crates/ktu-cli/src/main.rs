@@ -12,6 +12,8 @@ mod clock;
 mod command_run;
 mod commands_cmd;
 mod config_cmd;
+mod config_doctor;
+mod doctor_cmd;
 mod embeddings;
 mod guardrails_cmd;
 mod hub;
@@ -33,6 +35,7 @@ mod provider_script;
 mod providers;
 mod render;
 mod repl;
+mod repl_slash;
 mod run;
 mod run_cmd;
 mod script;
@@ -41,6 +44,7 @@ mod serve;
 mod session_cmd;
 mod session_mode;
 mod session_store;
+mod skills_cmd;
 mod slash;
 mod subagents;
 mod surface;
@@ -59,7 +63,7 @@ use ktu_core::ports::Logger;
 
 use crate::actions::{
     AgentsAction, CommandsAction, DrainCommand, GuardrailsAction, MemoryAction, PermissionAction,
-    ProvidersAction, SelfAction, SessionAction, TrashAction,
+    SelfAction, SessionAction, TrashAction,
 };
 use crate::cli::{Cli, Command};
 use crate::output::Format;
@@ -105,20 +109,7 @@ fn dispatch(command: Option<Command>, format: Format, logger: &logging::TracingL
         Some(command @ Command::Run { .. }) => run_cmd::dispatch_run(command, format, logger),
         Some(command @ Command::Session { .. }) => dispatch_session(command, format),
         Some(command @ Command::Serve { .. }) => dispatch_serve(command, logger),
-        Some(Command::Providers { action }) => match action {
-            ProvidersAction::Doctor {
-                base_url,
-                gguf,
-                probe,
-            } => {
-                let choice = if probe {
-                    ktu_provider::Probe::Run
-                } else {
-                    ktu_provider::Probe::Skip
-                };
-                providers::doctor(&base_url, gguf.as_deref(), choice, format)
-            }
-        },
+        Some(Command::Providers { action }) => providers::run(action, format),
         Some(Command::Trash { action }) => match action {
             TrashAction::List { root } => trash_cmd::list(&root_or_cwd(root), format),
             TrashAction::Restore { id, root } => {
@@ -128,6 +119,7 @@ fn dispatch(command: Option<Command>, format: Format, logger: &logging::TracingL
         Some(Command::Memory { action }) => match action {
             MemoryAction::Export { root } => memory_cmd::export(&root_or_cwd(root), format),
             MemoryAction::List { root } => memory_cmd::list(&root_or_cwd(root), format),
+            MemoryAction::Doctor { root } => memory_cmd::doctor(&root_or_cwd(root), format),
             MemoryAction::Project { root, session, out } => memory_cmd::project(
                 &root_or_cwd(root),
                 session.as_deref(),
@@ -162,19 +154,7 @@ fn dispatch(command: Option<Command>, format: Format, logger: &logging::TracingL
             mode_cmd::set(&root_or_cwd(root), &session, &target, approval)
         }
         Some(Command::Prompt { root }) => prompt_cmd::show(root, format),
-        Some(Command::Doctor { root, memory }) => {
-            let root = root_or_cwd(root);
-            if memory {
-                memory_cmd::doctor(&root, format)
-            } else {
-                providers::doctor(
-                    "http://127.0.0.1:8080",
-                    None,
-                    ktu_provider::Probe::Skip,
-                    format,
-                )
-            }
-        }
+        Some(Command::Doctor { root }) => doctor_cmd::run(&root_or_cwd(root), format),
         Some(Command::Tui { server, session }) => match tui::run(&server, &session) {
             Ok(()) => ExitCode::SUCCESS,
             Err(message) => {
@@ -189,6 +169,7 @@ fn dispatch(command: Option<Command>, format: Format, logger: &logging::TracingL
         Some(Command::Commands { action }) => match action {
             CommandsAction::Ls { root } => commands_cmd::list(root, format),
         },
+        Some(Command::Skills { action }) => skills_cmd::run(action, format),
         Some(Command::Agents { action }) => match action {
             AgentsAction::Ls { root } => agents_cmd::list(root, format),
         },

@@ -54,6 +54,17 @@ pub(crate) fn save_checkpoint(
     let Some(id) = config.session.id() else {
         return;
     };
+    save_checkpoint_for(fs, dir, id, log, clock);
+}
+
+/// Grava o checkpoint de **uma** sessão pelo id (o actor do REPL não tem `RunConfig` da sessão).
+pub(crate) fn save_checkpoint_for(
+    fs: &dyn Fs,
+    dir: &Path,
+    id: &str,
+    log: &SessionLog,
+    clock: &dyn Clock,
+) {
     let checkpoint = Checkpoint {
         session: id.to_owned(),
         turns: count_turns(log),

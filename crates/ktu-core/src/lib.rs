@@ -26,6 +26,7 @@ pub mod guardrails;
 pub mod layout;
 pub mod memory;
 pub mod memory_config;
+pub mod origin;
 pub mod permission;
 pub mod plan;
 pub mod plugin;
@@ -33,6 +34,7 @@ pub mod ports;
 pub mod prompt;
 pub mod provider;
 pub mod session;
+pub mod skill;
 pub mod store;
 pub mod subagent;
 pub mod taint;
@@ -43,6 +45,7 @@ pub mod tools;
 pub use error::{Error, Result};
 pub use facade::{Ktu, KtuBuilder, TurnOutcome};
 pub use memory_config::{EmbeddingProvider, Embeddings, MemoryConfig};
+pub use origin::Origin;
 pub use session::{Event, SessionLog};
 
 /// Versão do crate, herdada do workspace.

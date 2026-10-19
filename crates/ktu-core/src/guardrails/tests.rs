@@ -2,8 +2,9 @@
 
 use std::path::Path;
 
-use super::{ChainGuard, DeclarativeGuard, FactKind, glob_match, load, parse};
+use super::{ChainGuard, DeclarativeGuard, FactKind, glob_match, load, load_layered, parse};
 use crate::guard::{AgentId, Decision, DenyReason, Fact, Guard, StructuralGuard};
+use crate::origin::Origin;
 use crate::ports::MemFs;
 
 const VALID: &str = "---\nid: deny-dotenv\nversion: 1\napplies_to: explorer\nfact: path\nmatch: '*.env'\ndecision: deny\nreason: segredos\n---\n\n# razao humana\n";
@@ -126,4 +127,36 @@ fn glob_matches_star() {
     assert!(glob_match("x", "x"));
     assert!(!glob_match("*.env", "env"));
     assert!(!glob_match("a/*/c", "a/c"));
+}
+
+#[test]
+fn layered_load_keeps_the_global_floor_and_names_the_origin() -> Result<(), String> {
+    let global = "---\nid: deny-env\nversion: 1\nfact: path\nmatch: '*.env'\ndecision: deny\nreason: segredos\n---\n";
+    let local = "---\nid: deny-bash\nversion: 1\nfact: tool\nmatch: bash\ndecision: deny\nreason: sem shell\n---\n";
+    let fs = MemFs::new()
+        .with_file("/u/guardrails/deny-env.md", global)
+        .with_file("/p/.agents/guardrails/deny-bash.md", local);
+    let rules = load_layered(&fs, Some(Path::new("/u")), Path::new("/p"))?;
+    // Global primeiro: é o piso que o projecto não pode desligar (M5).
+    assert_eq!(
+        rules
+            .iter()
+            .map(|(origin, rule)| (*origin, rule.id.as_str()))
+            .collect::<Vec<_>>(),
+        vec![(Origin::Global, "deny-env"), (Origin::Local, "deny-bash")]
+    );
+    Ok(())
+}
+
+#[test]
+fn layered_load_without_a_user_dir_reads_only_the_project() -> Result<(), String> {
+    let local = "---\nid: deny-bash\nversion: 1\nfact: tool\nmatch: bash\ndecision: deny\nreason: sem shell\n---\n";
+    let fs = MemFs::new().with_file("/p/.agents/guardrails/deny-bash.md", local);
+    let rules = load_layered(&fs, None, Path::new("/p"))?;
+    assert_eq!(rules.len(), 1);
+    assert_eq!(
+        rules.first().map(|(origin, _rule)| *origin),
+        Some(Origin::Local)
+    );
+    Ok(())
 }

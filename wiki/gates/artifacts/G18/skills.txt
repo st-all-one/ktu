@@ -1,0 +1,2 @@
+kd	kd global	global
+rust	rust local	local

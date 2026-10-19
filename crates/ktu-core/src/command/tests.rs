@@ -2,7 +2,8 @@
 
 use std::path::Path;
 
-use super::{ARGUMENTS, Command, CommandSettings, ShellAccess, find, load, parse};
+use super::{ARGUMENTS, Command, CommandSettings, ShellAccess, find, load, load_layered, parse};
+use crate::origin::Origin;
 use crate::ports::MemFs;
 
 const DIR: &str = "/proj/.agents/commands";
@@ -165,4 +166,54 @@ fn shell_is_opt_in_and_segments_are_listed() {
         Vec::<String>::new()
     );
     assert!(parse("z.md", "---\nname: z\nshell: talvez\n---\n\ncorpo").is_err());
+}
+
+#[test]
+fn layered_load_gives_local_precedence_by_name() {
+    let fs = MemFs::new()
+        .with_file(
+            "/u/recipes/revisao.md",
+            "---
+description: global
+---
+
+global
+",
+        )
+        .with_file(
+            "/u/recipes/so-global.md",
+            "---
+description: g
+---
+
+so global
+",
+        )
+        .with_file(
+            Path::new(DIR).join("revisao.md"),
+            "---
+description: local
+---
+
+local
+",
+        );
+    let (commands, problems) = load_layered(&fs, Some(Path::new("/u")), Path::new("/proj"));
+    assert!(problems.is_empty(), "{problems:?}");
+    let names: Vec<&str> = commands
+        .iter()
+        .map(|(_origin, command)| command.name())
+        .collect();
+    assert_eq!(names, vec!["revisao", "so-global"]);
+    // O local ganha: uma só `revisao`, com o corpo local.
+    assert_eq!(
+        commands
+            .first()
+            .map(|(origin, command)| (*origin, command.prompt())),
+        Some((Origin::Local, "local"))
+    );
+    assert_eq!(
+        commands.get(1).map(|(origin, _command)| *origin),
+        Some(Origin::Global)
+    );
 }

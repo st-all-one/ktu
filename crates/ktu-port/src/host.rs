@@ -35,9 +35,11 @@ pub trait Host: Send + Sync {
 
     /// Entrega uma mensagem de *steering* ao turno em curso (fronteira segura).
     ///
+    /// O `id` é do **chamador**: repetir o mesmo `id` não duplica a mensagem (M7).
+    ///
     /// # Errors
     /// Devolve [`PortError::NoSession`] se a sessão não existir.
-    async fn steer(&self, session_id: &str, text: &str) -> Result<(), PortError>;
+    async fn steer(&self, session_id: &str, id: &str, text: &str) -> Result<(), PortError>;
 
     /// Muda o modo da sessão.
     ///

@@ -1,0 +1,1 @@
+{"success":true,"command":"doctor","data":{"healthy":true,"items":[{"detail":"7/7","name":"layout","ok":true,"remedy":null},{"detail":".agents/memory/notes.jsonl","name":"memory_source","ok":true,"remedy":null},{"detail":".agents/config.toml","name":"config","ok":true,"remedy":null}],"others":"ktu config doctor · ktu memory doctor · ktu providers doctor"}}

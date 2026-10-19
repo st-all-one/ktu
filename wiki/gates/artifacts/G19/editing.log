@@ -1,0 +1,16 @@
+{"event":"plugin_dispatch","hook":"session.start","generation":1,"allowed":true,"reason":null}
+{"event":"plugin_dispatch","hook":"user.input","generation":1,"allowed":true,"reason":null}
+{"event":"turn_start","prompt":"edita"}
+{"event":"plugin_dispatch","hook":"model.request","generation":1,"allowed":true,"reason":null}
+{"event":"plugin_dispatch","hook":"model.output","generation":1,"allowed":true,"reason":null}
+{"event":"assistant","content":"","reasoning":"","tool_calls":[{"id":"c1","name":"edit_file","arguments":"{\"path\":\"alvo.txt\",\"edits\":[{\"old\":\"fn somma(a: u32) -> u32 {\",\"new\":\"x\"}]}"}]}
+{"event":"plugin_dispatch","hook":"action.before","generation":1,"allowed":true,"reason":null}
+{"event":"guard_decision","tool":"edit_file","allowed":true,"reason":"allow"}
+{"event":"plugin_dispatch","hook":"guard.decision","generation":1,"allowed":true,"reason":null}
+{"event":"plugin_dispatch","hook":"action.after","generation":1,"allowed":true,"reason":null}
+{"event":"tool_result","tool_call_id":"c1","name":"edit_file","content":"bloco 1: texto nao encontrado: fn somma(a: u32) -> u32 {; mais proximas: 3: fn soma(a: u32) -> u32 { em alvo.txt","is_error":true}
+{"event":"plugin_dispatch","hook":"model.request","generation":1,"allowed":true,"reason":null}
+{"event":"plugin_dispatch","hook":"model.output","generation":1,"allowed":true,"reason":null}
+{"event":"assistant","content":"fim","reasoning":"","tool_calls":[]}
+{"event":"turn_end","reason":"max_steps"}
+{"event":"plugin_dispatch","hook":"session.end","generation":1,"allowed":true,"reason":null}

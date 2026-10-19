@@ -23,6 +23,20 @@ pub(crate) enum Slash {
     Mode,
     /// Cancela o turno em curso (`Cancel`).
     Cancel,
+    /// Força a compactação do contexto (`Cmd::Compact`).
+    Compact,
+    /// Copia a sessão para um novo id (`/fork <novo>`).
+    Fork {
+        /// Identificador de destino.
+        to: String,
+    },
+    /// Mostra a memória do projecto (`ktu memory list`).
+    Memory,
+    /// Retoma outra sessão (`/resume [id]`) — sem id, lista as disponíveis.
+    Resume {
+        /// Identificador a abrir.
+        id: Option<String>,
+    },
     /// Comando do projecto (`.agents/commands/*.md`), resolvido por nome.
     Custom {
         /// Nome do comando.
@@ -40,6 +54,10 @@ comandos:
   /build           volta a build (com aprovacao)
   /mode            mostra o modo corrente
   /cancel          cancela o turno em curso
+  /compact         forca a compactacao do contexto
+  /fork <novo>     copia esta sessao para um novo id
+  /memory          mostra a memoria do projecto
+  /resume [id]     abre outra sessao (sem id, lista-as)
   /quit            sai (Ctrl-D tambem)
 multi-linha: termina a linha com `\\` para continuar.
 durante um turno: escrever envia *steering*; /cancel cancela.";
@@ -68,6 +86,14 @@ pub(crate) fn parse_slash(line: &str) -> Option<Slash> {
         "build" => Slash::Build,
         "mode" => Slash::Mode,
         "cancel" => Slash::Cancel,
+        "compact" => Slash::Compact,
+        "memory" => Slash::Memory,
+        "fork" => Slash::Fork {
+            to: tail.trim().to_owned(),
+        },
+        "resume" => Slash::Resume {
+            id: (!tail.trim().is_empty()).then(|| tail.trim().to_owned()),
+        },
         other => Slash::Custom {
             name: other.to_owned(),
             args: tail.trim().to_owned(),
@@ -85,6 +111,29 @@ mod tests {
         assert_eq!(parse_slash("  /plan  "), Some(Slash::Plan));
         assert_eq!(parse_slash("/exit"), Some(Slash::Quit));
         assert_eq!(parse_slash("/build extra"), Some(Slash::Build));
+    }
+
+    #[test]
+    fn parses_the_interactive_commands_of_the_phase_3() {
+        assert_eq!(parse_slash("/compact"), Some(Slash::Compact));
+        assert_eq!(parse_slash("/memory"), Some(Slash::Memory));
+        assert_eq!(
+            parse_slash("/fork copia"),
+            Some(Slash::Fork {
+                to: "copia".to_owned()
+            })
+        );
+        assert_eq!(
+            parse_slash("/fork"),
+            Some(Slash::Fork { to: String::new() })
+        );
+        assert_eq!(
+            parse_slash("/resume outra"),
+            Some(Slash::Resume {
+                id: Some("outra".to_owned())
+            })
+        );
+        assert_eq!(parse_slash("/resume"), Some(Slash::Resume { id: None }));
     }
 
     #[test]

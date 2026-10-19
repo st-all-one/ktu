@@ -21,28 +21,45 @@ pub const SYSTEM_FILE: &str = "SYSTEM.md";
 /// Projecto: `.agents/APPEND_SYSTEM.md` · utilizador: `<global>/APPEND_SYSTEM.md`.
 pub const APPEND_SYSTEM_FILE: &str = "APPEND_SYSTEM.md";
 
-/// Base do agente (identidade e disciplina).
+/// Base do agente (identidade, disciplina e convenções do projecto).
+///
+/// É o **prompt do próprio agente**: as convenções do ktu vivem aqui (e não num
+/// ficheiro gerado por projecto) — ver ADR 0022. O protocolo completo é o `ktu prime`.
 pub const BASE: &str = "Es o ktu, um agente de programação. Trabalhas em passos: usa as tools para \
 ler e alterar ficheiros e apresenta o teu raciocínio de forma concisa. Nunca inventes resultados: \
 baseia-te no que as tools devolvem. Mantém memória durável do projeto: consulta `memory_ask` \
 antes de decidir e grava cada aprendizado com `memory_write` — uma afirmação por nota, com \
-`kind`, `tags` e `anchors` quando aplicáveis. É a memória que sobrevive entre sessões.";
+`kind`, `tags` e `anchors` quando aplicáveis. É a memória que sobrevive entre sessões. \
+Convenções do projecto: `.agents/` é o conhecimento (skills, guardrails, memória — versionável); \
+`.ktu/` é o runtime (sessões, plugins, planos, trash); o `AGENTS.md` (raiz e aninhados) traz as \
+instruções do projecto e entra no prompt. Protocolo completo: `ktu prime`.";
 
 /// Compõe o system prompt: `base` + `AGENTS.md` condensado (se houver).
 #[must_use]
 pub fn compose(base: &str, agents_md: Option<&str>) -> String {
-    compose_layers(base, agents_md, None)
+    compose_layers(base, agents_md, None, None)
 }
 
 /// Compõe o system prompt em **camadas**, por ordem: directriz (`system`),
-/// `AGENTS.md` e acrescento (`append`).
+/// `AGENTS.md`, skills e acrescento (`append`).
 ///
 /// Cada camada é condensada e as vazias são omitidas; as restantes são separadas
 /// por uma linha em branco. Determinístico e sem cache.
+///
+/// As skills ficam **antes** do acrescento: o `APPEND_SYSTEM.md` é a última palavra
+/// do utilizador; as skills são conteúdo de referência (protocolos).
 #[must_use]
-pub fn compose_layers(system: &str, agents_md: Option<&str>, append: Option<&str>) -> String {
+pub fn compose_layers(
+    system: &str,
+    agents_md: Option<&str>,
+    skills: Option<&str>,
+    append: Option<&str>,
+) -> String {
     let mut parts: Vec<String> = Vec::new();
-    for layer in [Some(system), agents_md, append].into_iter().flatten() {
+    for layer in [Some(system), agents_md, skills, append]
+        .into_iter()
+        .flatten()
+    {
         let text = condense(layer);
         if !text.is_empty() {
             parts.push(text);
@@ -161,6 +178,14 @@ mod tests {
     }
 
     #[test]
+    fn base_carries_the_project_conventions() {
+        // As convenções do ktu vivem no prompt do agente, não num ficheiro gerado.
+        for needle in [".agents/", ".ktu/", "AGENTS.md", "ktu prime"] {
+            assert!(BASE.contains(needle), "falta {needle} na base");
+        }
+    }
+
+    #[test]
     fn condense_drops_html_comments() {
         let text = "# titulo\n<!-- knudge:start -->\nsegredo\n<!-- knudge:end -->\ncorpo";
         let result = condense(text);
@@ -182,12 +207,12 @@ mod tests {
     #[test]
     fn compose_layers_orders_and_skips_empty_layers() {
         assert_eq!(
-            compose_layers("sistema", Some("agents"), Some("extra")),
-            "sistema\n\nagents\n\nextra"
+            compose_layers("sistema", Some("agents"), Some("skills"), Some("extra")),
+            "sistema\n\nagents\n\nskills\n\nextra"
         );
-        assert_eq!(compose_layers("sistema", None, None), "sistema");
+        assert_eq!(compose_layers("sistema", None, None, None), "sistema");
         assert_eq!(
-            compose_layers("sistema", Some("   "), Some("extra")),
+            compose_layers("sistema", Some("   "), None, Some("extra")),
             "sistema\n\nextra"
         );
     }

@@ -90,6 +90,29 @@ fn a_declarative_rule_escalates_with_its_own_remedy() -> Result<(), Box<dyn std:
     Ok(())
 }
 
+/// Uma regra `deny` com remédio próprio: a mensagem traz o remédio **da regra** e,
+/// sem o substituir, o **estrutural** do motivo (F4).
+#[test]
+fn a_deny_rule_with_its_own_remedy_keeps_the_structural_one()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = fresh_root("deny-remedy");
+    let dir = root.join(".agents").join("guardrails");
+    fs::create_dir_all(&dir)?;
+    let rule = "---\nid: deny-agents\nversion: 1\napplies_to: '*'\nfact: tool\nmatch: read_file\ndecision: deny\nreason: leitura sensivel\nremedy: pede autorizacao ao responsavel\n---\n";
+    fs::write(dir.join("deny-agents.md"), rule)?;
+
+    let denied = run_mock(&root)?;
+    assert!(
+        denied.contains("negado: guardrail — pede autorizacao ao responsavel"),
+        "{denied}"
+    );
+    // O remedio estrutural do motivo continua la (nunca substituido).
+    assert!(denied.contains("respeite o guardrail"), "{denied}");
+
+    let _ignored = fs::remove_dir_all(&root);
+    Ok(())
+}
+
 #[test]
 fn permissions_survive_resume() -> Result<(), Box<dyn std::error::Error>> {
     let root = fresh_root("resume");

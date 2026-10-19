@@ -24,7 +24,7 @@ Verificado no host (`kd --help`, `kd ask --help`, `kd write --help`, `kd self --
 | **Códigos de saída** | 2 invalid, 3 not_found, 4 conflict, 5 io, 6 timeout, 7 config, 8 schema, 70 internal | ✅ |
 | **`prime`** | protocolo estático, byte-idêntico por versão | ✅ (`71`) |
 | **`self`** | `setup`/`completions`/`upgrade`/`version`/`surface` | ✅ (`setup` adiado: A3) |
-| **`config`** | `get`/`set`/`unset`/`list` (+`promote`) | ✅ (global+local) |
+| **`config`** | `get`/`set`/`unset`/`list`/`doctor` (+`promote`) | ✅ (global+local; `doctor` mostra o schema) |
 | **Rodapé de ajuda** | CICLO, ÂNCORAS, CORPO, "veja: `kd help <verbo>`" | ✅ |
 | **Config em dois níveis** | `~/.config/local/knudge/config.toml` + `.knudge/config.toml` | ✅ (sem o `local/` extra) |
 
@@ -106,15 +106,15 @@ PORTA         serve · tui
 | `ktu session [id]` | **REPL** na sessão `id` (default: `main`) |
 | `ktu session ls\|rm\|fork\|resume` | gestão de sessões |
 | `ktu run` | turno explícito (com `--session` para persistir) |
-| `ktu memory` | `list\|ask\|write` (inspecção da memória) |
+| `ktu memory` | `list\|export\|project\|drain\|doctor` (vistas e saúde da memória) |
 | `ktu guardrails` | `list\|check` |
 | `ktu plugins` | `list\|reload` |
 | `ktu init` | cria `.agents/` + `.ktu/` |
-| `ktu config` | `get\|set\|unset\|list` (`--local`/`--global`) |
-| `ktu doctor` | saúde (layout, memória, provider) |
+| `ktu config` | `get\|set\|unset\|list\|doctor` (`--local`/`--global`) |
+| `ktu doctor` | saúde do **projecto** (layout, `AGENTS.md`, skill) — aponta `config`/`memory`/`providers` |
 | `ktu mode` | `plan\|build` |
-| `ktu self` | `version\|upgrade\|completions\|surface` (`setup` adiado: A3) |
-| `ktu providers` | diagnóstico do provider |
+| `ktu self` | `version\|upgrade\|completions\|surface` (`setup` fechado sem plano: [F6](implementation_phase3/F6-self-setup.md)) |
+| `ktu providers` | diagnóstico do provider (`doctor`) |
 | `ktu prime` | protocolo do agente (byte-idêntico por versão) |
 | `ktu help [verbo]` | ajuda por área |
 | `ktu serve` | porta HTTP (para TUI/web) |
@@ -171,7 +171,7 @@ PORTA         serve · tui
 
 ```
 .agents/
-  AGENTS.md        # router de instruções do projeto
+  AGENTS.md        # instruções do projeto (escrito por ti; o ktu só lê)
   config.toml      # config do projeto (ganha chave a chave sobre a global)
   skills/          # sobrescrevem as globais de mesmo nome
   guardrails/      # adicionam aos globais (nunca removem)
@@ -210,10 +210,10 @@ ktu init [--force] [--git-excluded | --git-tracked] [--no-prompt]
 1. **Cria o layout:** `.agents/` (`skills/`, `guardrails/`, `memory/`, `recipes/`) + `.ktu/`
    (`sessions/`, `plugins/`, `trash/`, `plan/`, `logs/`).
 2. **Copia elementos:**
-   - **skill do ktu** `.agents/skills/ktu/SKILL.md` (como a skill `kd` do knudge, D162) — ensina o
-     protocolo ao agente;
    - **template de config** `.agents/config.toml` (só se ausente, ou `--force`);
-   - **bloco gerido no `AGENTS.md`** (protocolo do ktu) com marcadores e version marker.
+   - **nada sobre o próprio ktu**: as convenções vivem na base do prompt do agente
+     ([ADR 0022](adr/0022-convencoes-na-base-do-prompt.md)) e o protocolo completo é o `ktu prime`;
+   - **nada no `AGENTS.md`** — o ficheiro é do projecto (instruções do humano); o protocolo do agente vive em `ktu prime` e na base do prompt ([ADR 0021](adr/0021-o-init-nao-escreve-no-agents-md.md)).
 3. **Ajusta o git** (nunca `.gitignore`):
    - **`.git/info/exclude`** — linhas geridas, dependentes do modo (§4.2);
    - **`.gitattributes`** — bloco gerido (`# ktu:start`/`# ktu:end`): `eol=lf` nas notas/eventos,
@@ -230,7 +230,6 @@ ktu init [--force] [--git-excluded | --git-tracked] [--no-prompt]
 Alternar entre modos **reverte** as linhas do modo anterior (sem duplicar) — tática do knudge.
 
 ### 4.3 Marcadores idempotentes (a tática do knudge)
-- `AGENTS.md`: `<!-- ktu:start -->` / `<!-- ktu:end -->` + `<!-- ktu:version: N -->`.
 - `.gitattributes`: `# ktu:start` / `# ktu:end`.
 - `.git/info/exclude`: linhas identificadas por prefixo/comment gerido.
 

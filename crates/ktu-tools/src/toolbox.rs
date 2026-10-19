@@ -16,6 +16,7 @@ use ktu_core::tools::{ToolExecutor, ToolOutcome};
 use crate::bash::BashTool;
 use crate::fs_tools::FsTools;
 use crate::memory_tools::MemoryTools;
+use crate::mutation::FileMutationQueue;
 use crate::trash::TrashTool;
 
 /// Conjunto de ferramentas da sessão.
@@ -37,10 +38,11 @@ impl<'a> Toolbox<'a> {
         fs: &'a dyn Fs,
         clock: &'a dyn Clock,
         memory: Option<&'a dyn Memory>,
+        mutations: &'a FileMutationQueue,
     ) -> Self {
         let root = root.into();
         Self {
-            fs: FsTools::new(root.clone(), fs),
+            fs: FsTools::new(root.clone(), fs, mutations),
             bash: BashTool::new(root.clone()),
             trash: TrashTool::new(root, fs, clock),
             memory: memory.map(MemoryTools::new),

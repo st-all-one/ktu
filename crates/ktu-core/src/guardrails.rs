@@ -9,6 +9,8 @@ use std::path::Path;
 
 use crate::frontmatter::{self, required};
 use crate::guard::{AgentId, Decision, DenyReason, Fact, Guard};
+use crate::layout::AGENTS_DIR;
+use crate::origin::Origin;
 use crate::ports::Fs;
 
 /// Versão do schema de guardrail suportada.
@@ -153,6 +155,37 @@ pub fn load(fs: &dyn Fs, dir: &Path) -> Result<Vec<Rule>, String> {
         }
     }
     rules.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(rules)
+}
+
+/// Uma regra com o nível de onde veio (M8).
+pub type Loaded = (Origin, Rule);
+
+/// Carrega as regras dos **dois** níveis, com a origem de cada uma.
+///
+/// A ordem é a **efectiva**: global primeiro (piso aditivo, M5), o projecto depois;
+/// dentro de cada nível, por `id`. Um ficheiro inválido é erro (I16), nomeando-o.
+///
+/// # Errors
+/// Devolve mensagem legível se uma regra de qualquer dos níveis não carregar.
+pub fn load_layered(
+    fs: &dyn Fs,
+    user_dir: Option<&Path>,
+    root: &Path,
+) -> Result<Vec<Loaded>, String> {
+    let mut rules: Vec<Loaded> = Vec::new();
+    if let Some(dir) = user_dir {
+        rules.extend(
+            load(fs, &dir.join("guardrails"))?
+                .into_iter()
+                .map(|rule| (Origin::Global, rule)),
+        );
+    }
+    rules.extend(
+        load(fs, &root.join(AGENTS_DIR).join("guardrails"))?
+            .into_iter()
+            .map(|rule| (Origin::Local, rule)),
+    );
     Ok(rules)
 }
 

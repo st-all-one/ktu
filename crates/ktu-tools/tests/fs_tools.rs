@@ -3,7 +3,7 @@
 use ktu_core::domain::{ToolCall, ToolCallId};
 use ktu_core::ports::MemFs;
 use ktu_core::tools::{ToolExecutor, ToolOutcome};
-use ktu_tools::FsTools;
+use ktu_tools::{FileMutationQueue, FsTools};
 
 fn call(name: &str, arguments: &str) -> ToolCall {
     ToolCall {
@@ -26,7 +26,8 @@ async fn run(tools: &FsTools<'_>, name: &str, arguments: &str) -> ToolOutcome {
 #[tokio::test]
 async fn read_file_is_taint_wrapped() {
     let fs = mem();
-    let tools = FsTools::new("/r", &fs);
+    let mutations = FileMutationQueue::new();
+    let tools = FsTools::new("/r", &fs, &mutations);
     let outcome = run(&tools, "read_file", r#"{"path":"a.txt"}"#).await;
     assert!(!outcome.is_error);
     assert!(outcome.content.contains("[untrusted: read_file]"));
@@ -36,7 +37,8 @@ async fn read_file_is_taint_wrapped() {
 #[tokio::test]
 async fn write_then_edit_round_trips() {
     let fs = mem();
-    let tools = FsTools::new("/r", &fs);
+    let mutations = FileMutationQueue::new();
+    let tools = FsTools::new("/r", &fs, &mutations);
     let written = run(
         &tools,
         "write_file",
@@ -58,7 +60,8 @@ async fn write_then_edit_round_trips() {
 #[tokio::test]
 async fn edit_rejects_ambiguous_or_missing_text() {
     let fs = MemFs::new().with_file("/r/a.txt", "x x");
-    let tools = FsTools::new("/r", &fs);
+    let mutations = FileMutationQueue::new();
+    let tools = FsTools::new("/r", &fs, &mutations);
     let ambiguous = run(
         &tools,
         "edit_file",
@@ -78,7 +81,8 @@ async fn edit_rejects_ambiguous_or_missing_text() {
 #[tokio::test]
 async fn rejects_path_escape() {
     let fs = mem();
-    let tools = FsTools::new("/r", &fs);
+    let mutations = FileMutationQueue::new();
+    let tools = FsTools::new("/r", &fs, &mutations);
     let outcome = run(&tools, "read_file", r#"{"path":"../etc/passwd"}"#).await;
     assert!(outcome.is_error);
 }
@@ -86,7 +90,8 @@ async fn rejects_path_escape() {
 #[tokio::test]
 async fn glob_and_grep_walk_the_root() {
     let fs = mem();
-    let tools = FsTools::new("/r", &fs);
+    let mutations = FileMutationQueue::new();
+    let tools = FsTools::new("/r", &fs, &mutations);
     let globbed = run(&tools, "glob", r#"{"pattern":"src/**/*.rs"}"#).await;
     assert!(globbed.content.contains("src/main.rs"));
     let grepped = run(&tools, "grep", r#"{"pattern":"main"}"#).await;

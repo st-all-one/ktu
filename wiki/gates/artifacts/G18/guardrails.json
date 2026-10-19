@@ -1,0 +1,1 @@
+{"success":true,"command":"guardrails list","data":{"rules":[{"id":"deny-env","origin":"global"},{"id":"deny-bash","origin":"local"}]}}

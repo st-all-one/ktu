@@ -3,7 +3,7 @@
     {
       "checks": [
         {
-          "detail": "exit=exit status: 0 {\"timestamp\":\"2026-10-18T11:35:35.317988Z\",\"level\":\"INFO\",\"fields\":{\"event\":\"plugin.dispatch\",\"message\":\"hook despachado\",\"fields\":\"[(\\\"event\\\", \\\"session.end\\\"), (\\\"generation\\\", \\\"1\\\"), (\\\"allowed\\\", \\\"true\\\"), (\\\"reason\\\", \\\"\\\")]\"},\"target\":\"ktu::logging\"}",
+          "detail": "exit=exit status: 0 {\"timestamp\":\"2026-10-19T07:16:02.406969Z\",\"level\":\"INFO\",\"fields\":{\"event\":\"plugin.dispatch\",\"message\":\"hook despachado\",\"fields\":\"[(\\\"event\\\", \\\"session.end\\\"), (\\\"generation\\\", \\\"1\\\"), (\\\"allowed\\\", \\\"true\\\"), (\\\"reason\\\", \\\"\\\")]\"},\"target\":\"ktu::logging\"}",
           "name": "a cadeia corre de ponta a ponta",
           "ok": true
         },
@@ -61,7 +61,7 @@
       ],
       "id": "G11",
       "notes": [
-        "Observacao com o modelo real (qwen2.5-coder-1.5b em http://127.0.0.1:8080): exit=exit status: 0, turnos fechados=0, resposta final=\"\""
+        "Modelo real nao corrido (sem `--real-model`): a prova e o caminho declarado-em-texto, que e o que um modelo fraco produz."
       ],
       "ok": true,
       "title": "Robustez multi-modelo: tool call em texto e reparacao"
@@ -149,7 +149,7 @@
           "ok": true
         },
         {
-          "detail": "antes=[\"b0edfb966c380cc1\", \"c29febe2fc53206b\", \"6d1d73d0e0c8364c\"] depois=[\"b0edfb966c380cc1\", \"c29febe2fc53206b\", \"6d1d73d0e0c8364c\"]",
+          "detail": "antes=[\"b0edfb966c380cc1\", \"c29febe2fc53206b\"] depois=[\"b0edfb966c380cc1\", \"c29febe2fc53206b\"]",
           "name": "ktu init e idempotente (ficheiros geridos inalterados)",
           "ok": true
         },
@@ -194,8 +194,28 @@
           "ok": true
         },
         {
-          "detail": "exit=exit status: 0 allowed=false: true ({\"timestamp\":\"2026-10-18T11:35:51.068196Z\",\"level\":\"INFO\",\"fields\":{\"event\":\"plugin.dispatch\",\"message\":\"hook despachado\",\"fields\":\"[(\\\"event\\\", \\\"session.end\\\"), (\\\"generation\\\", \\\"1\\\"), (\\\"allowed\\\", \\\"true\\\"), (\\\"reason\\\", \\\"\\\")]\"},\"target\":\"ktu::logging\"})",
+          "detail": "exit=exit status: 0 allowed=false: true ({\"timestamp\":\"2026-10-19T07:16:12.185309Z\",\"level\":\"INFO\",\"fields\":{\"event\":\"plugin.dispatch\",\"message\":\"hook despachado\",\"fields\":\"[(\\\"event\\\", \\\"session.end\\\"), (\\\"generation\\\", \\\"1\\\"), (\\\"allowed\\\", \\\"true\\\"), (\\\"reason\\\", \\\"\\\")]\"},\"target\":\"ktu::logging\"})",
           "name": "M5: guardrail global nao e desligavel pelo projecto",
+          "ok": true
+        },
+        {
+          "detail": "healthy=true",
+          "name": "o doctor do projecto esta em dia depois do init",
+          "ok": true
+        },
+        {
+          "detail": "/home/one/projects/one/ktu/.ktu/gates/g14/.agents/skills/ktu/SKILL.md existe: false",
+          "name": "o init nao gera a skill do ktu (as convencoes vivem na base do prompt)",
+          "ok": true
+        },
+        {
+          "detail": "intacto: true",
+          "name": "o init nao toca no AGENTS.md do projecto",
+          "ok": true
+        },
+        {
+          "detail": "command=memory doctor: true",
+          "name": "o diagnostico da memoria tem porta propria",
           "ok": true
         }
       ],
@@ -242,12 +262,12 @@
           "ok": true
         },
         {
-          "detail": "exit=exit status: 0 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+          "detail": "exit=exit status: 0 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
           "name": "knudge: `ask --agent` filtra por proveniencia (fonte JSONL)",
           "ok": true
         },
         {
-          "detail": "exit=exit status: 0 test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 690 filtered out; finished in 0.09s",
+          "detail": "exit=exit status: 0 test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 690 filtered out; finished in 0.08s",
           "name": "knudge: a fonte JSONL e read-only, deduplica e tolera linhas mas",
           "ok": true
         }
@@ -256,6 +276,316 @@
       "notes": [],
       "ok": true,
       "title": "Eixo de memoria: escreve, recupera noutra sessao, derivado"
+    },
+    {
+      "checks": [
+        {
+          "detail": "exit=exit status: 0 steer_queued=1",
+          "name": "a linha e admitida no log (durante o turno)",
+          "ok": true
+        },
+        {
+          "detail": "steer=0",
+          "name": "a admissao vem antes da entrega (sem entrega no mesmo turno)",
+          "ok": true
+        },
+        {
+          "detail": "ok",
+          "name": "I1/I2 limpos depois do turno",
+          "ok": true
+        },
+        {
+          "detail": "exit=exit status: 0 steer=1",
+          "name": "a admissao pendente e entregue no turno seguinte",
+          "ok": true
+        },
+        {
+          "detail": "texto presente no log",
+          "name": "a mensagem entregue e a que foi admitida",
+          "ok": true
+        },
+        {
+          "detail": "exit=exit status: 0 steer=1",
+          "name": "entregue exactamente uma vez (3 corridas na mesma sessao)",
+          "ok": true
+        },
+        {
+          "detail": "ok",
+          "name": "I1/I2 limpos no fim",
+          "ok": true
+        },
+        {
+          "detail": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 191 filtered out; finished in 0.00s",
+          "name": "o mesmo id nao duplica a mensagem (kernel)",
+          "ok": true
+        },
+        {
+          "detail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.12s",
+          "name": "o mesmo id nao duplica pela porta HTTP",
+          "ok": true
+        }
+      ],
+      "id": "G16",
+      "notes": [
+        "A admissao e gravada na primeira fronteira do loop (o kernel nao tem I/O; a gravacao do log e do actor). A janela que a admissao duravel cobre e: admissao registada -> processo morre antes da entrega -> retomada entrega a mensagem uma vez."
+      ],
+      "ok": true,
+      "title": "Steering duravel e idempotente (M7)"
+    },
+    {
+      "checks": [
+        {
+          "detail": "exit=exit status: 0",
+          "name": "sessao semeada com um turno",
+          "ok": true
+        },
+        {
+          "detail": "ajuda do REPL",
+          "name": "o /help lista /compact, /fork, /memory e /resume",
+          "ok": true
+        },
+        {
+          "detail": "nota listada no REPL",
+          "name": "o /memory mostra as notas do projecto",
+          "ok": true
+        },
+        {
+          "detail": "exit=exit status: 0 igual=true",
+          "name": "o /fork copia a sessao (byte-a-byte)",
+          "ok": true
+        },
+        {
+          "detail": "exit=exit status: 0",
+          "name": "o /resume muda de sessao",
+          "ok": true
+        },
+        {
+          "detail": "repl_exit=exit status: 0 iguais=true",
+          "name": "o /compact grava o mesmo corte que --compact",
+          "ok": true
+        },
+        {
+          "detail": "turnos=3",
+          "name": "o /compact nao altera o log cru",
+          "ok": true
+        },
+        {
+          "detail": "o processo saiu com sucesso",
+          "name": "Ctrl-C cancela o turno sem matar o processo",
+          "ok": true
+        },
+        {
+          "detail": "reason=cancelled no log",
+          "name": "o turno cancelado fecha com StopReason::Cancelled",
+          "ok": true
+        },
+        {
+          "detail": "ok",
+          "name": "I1/I2 limpos depois do Ctrl-C",
+          "ok": true
+        }
+      ],
+      "id": "G17",
+      "notes": [
+        "A Tab (completar / e caminhos) continua **adiada**: exige *raw mode* e gestão do terminal em volta dos logs do turno (o REPL escreve em stderr enquanto o utilizador escreve). O resto do F2 esta entregue."
+      ],
+      "ok": true,
+      "title": "REPL interactivo (comandos / e Ctrl-C)"
+    },
+    {
+      "checks": [
+        {
+          "detail": "kd\tkd global\tglobal | rust\trust local\tlocal",
+          "name": "skills: o local ganha por nome (uma so `rust`)",
+          "ok": true
+        },
+        {
+          "detail": "kd global",
+          "name": "skills: a global sem homonimo continua visivel, com origem",
+          "ok": true
+        },
+        {
+          "detail": "revisao\tlocal\tlocal | so-global\tso global\tglobal | ",
+          "name": "receitas: o local ganha por nome e a origem aparece",
+          "ok": true
+        },
+        {
+          "detail": "[(\"deny-env\", \"global\"), (\"deny-bash\", \"local\")]",
+          "name": "guardrails: o piso global vem primeiro, com origem",
+          "ok": true
+        },
+        {
+          "detail": "[(\"deny-env\", \"global\"), (\"deny-bash\", \"local\")]",
+          "name": "M8: nenhuma regra efectiva fica sem origem",
+          "ok": true
+        },
+        {
+          "detail": "exit=exit status: 0",
+          "name": "M5: o projecto nao desliga a regra global",
+          "ok": true
+        },
+        {
+          "detail": "geracao 1 | g1\tglobal | g2\tglobal | g1\tlocal | ",
+          "name": "plugins: aditivos (o mesmo nome nos dois niveis corre duas vezes)",
+          "ok": true
+        },
+        {
+          "detail": "tem Skills: true",
+          "name": "o prompt compõe as skills efectivas (local ganha)",
+          "ok": true
+        },
+        {
+          "detail": "kd no prompt",
+          "name": "o prompt compõe tambem a skill so global (por nome)",
+          "ok": true
+        },
+        {
+          "detail": "passos=2",
+          "name": "receitas: o `max_steps` efectivo e o da receita local",
+          "ok": true
+        }
+      ],
+      "id": "G18",
+      "notes": [
+        "`ktu agents ls` **nao** ganhou origem: os agentes declarativos nao tem nivel global (uma coluna constante seria ruido); o M8 lista guardrails, skills, plugins e receitas."
+      ],
+      "ok": true,
+      "title": "Recursos globais e piso visivel (M8)"
+    },
+    {
+      "checks": [
+        {
+          "detail": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+          "name": "o mesmo caminho serializa e nenhuma edicao se perde",
+          "ok": true
+        },
+        {
+          "detail": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 0.01s",
+          "name": "o processo partilha uma fila entre sessoes",
+          "ok": true
+        },
+        {
+          "detail": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s",
+          "name": "caminhos distintos correm em paralelo",
+          "ok": true
+        },
+        {
+          "detail": "remedio da regra",
+          "name": "a recusa traz o remedio da regra",
+          "ok": true
+        },
+        {
+          "detail": "remedio estrutural",
+          "name": "a recusa nao perde o remedio estrutural do motivo",
+          "ok": true
+        },
+        {
+          "detail": "sugestao com numero de linha",
+          "name": "a ancora errada sugere a linha correcta",
+          "ok": true
+        },
+        {
+          "detail": "ficheiro intacto",
+          "name": "a edicao falhada nao altera o ficheiro",
+          "ok": true
+        },
+        {
+          "detail": "\"final\\n\"",
+          "name": "a escrita pelo binario deixa o ficheiro final esperado",
+          "ok": true
+        }
+      ],
+      "id": "G19",
+      "notes": [
+        "A fila e **do processo** (Arc no `Inner` do hub, uma por lote): o `ktu serve` corre um actor por sessao e o `--batch --parallel` uma thread por worker, pelo que uma fila por turno nao serializaria nada entre sessoes. O que continua **fora**: dois processos no mesmo projecto (lock de ficheiro) e a escrita atomica (temp + rename) — ver `wiki/pendencias.md`."
+      ],
+      "ok": true,
+      "title": "Edicao sob concorrencia (fila, remedio, ancoras)"
+    },
+    {
+      "checks": [
+        {
+          "detail": "local e global em v0: 2",
+          "name": "o doctor mostra a versao dos dois niveis e se migrariam",
+          "ok": true
+        },
+        {
+          "detail": "hash 5d5d4bfaa02104d0",
+          "name": "o doctor nao escreve",
+          "ok": true
+        },
+        {
+          "detail": "valor \"bash,write_file\\n\" com o ficheiro intacto",
+          "name": "a leitura aceita a forma plana antiga (CSV) sem reescrever o ficheiro",
+          "ok": true
+        },
+        {
+          "detail": "schema carimbado: true",
+          "name": "a escrita migra com aviso em stderr (nunca em silencio)",
+          "ok": true
+        },
+        {
+          "detail": "hash 7909f243b7f6adc6 -> 7909f243b7f6adc6",
+          "name": "migrar duas vezes nao muda nada (idempotente)",
+          "ok": true
+        },
+        {
+          "detail": "ktu: config no schema v3, mais recente que o v1 deste binario: atualize o ktu (nenhum ficheiro foi alterado)",
+          "name": "uma versao futura e recusada com mensagem legivel",
+          "ok": true
+        },
+        {
+          "detail": "hash 7708c976ad0d0c99",
+          "name": "a recusa nao escreve",
+          "ok": true
+        }
+      ],
+      "id": "G20",
+      "notes": [
+        "O v1 normaliza `deferred_tools` (a forma plana/CSV do v0 -> lista) e carimba `schema = 1`; a lista de chaves obsoletas esta **vazia** (nenhuma chave foi retirada desde o inicio — as KEYS nunca mudaram), pelo que o mecanismo de retirada fica montado para o v2 (testado por um passo de ensaio no core). Leitura e escrita sao diferentes de forma deliberada: `read_migrate` nunca retira chaves (outro chamador pode consulta-las), `migrate` pode."
+      ],
+      "ok": true,
+      "title": "Migracoes de config (schema, idempotencia, fail-closed)"
+    },
+    {
+      "checks": [
+        {
+          "detail": "check-links: 813 links relativos, 0 avisos",
+          "name": "a arvore actual nao tem links quebrados",
+          "ok": true
+        },
+        {
+          "detail": "/home/one/projects/one/ktu/.ktu/gates/g22/ensaio/wiki/index.md → nao-existe.md",
+          "name": "um link quebrado falha com o par (ficheiro, alvo)",
+          "ok": true
+        },
+        {
+          "detail": "check-links: aviso: /home/one/projects/one/ktu/.ktu/gates/g22/ensaio/wiki/index.md → guia.md#seccao-que-nao-existe (ancora `#seccao-que-nao-existe` nao encontrada)",
+          "name": "ancora inexistente e aviso, nao erro",
+          "ok": true
+        },
+        {
+          "detail": "exit status: 0 (avisos: 0)",
+          "name": "o doc nao tem avisos",
+          "ok": true
+        },
+        {
+          "detail": "run: make check-knudge",
+          "name": "a CI corre o portao do knudge",
+          "ok": true
+        },
+        {
+          "detail": "22 binarios de teste, 0 com falhas",
+          "name": "a suite do knudge passa",
+          "ok": true
+        }
+      ],
+      "id": "G22",
+      "notes": [
+        "O knudge e um workspace proprio (`exclude` na raiz): o `make check` da raiz nao o ve, pelo que o portao dele corre num alvo dedicado (`make check-knudge`) chamado pela CI. O gate prova as duas metades: o wiring (alvo no `Makefile` + passo no workflow) e a suite (corre aqui o mesmo comando do passo; medido: ~6 s com o alvo quente, ~45 s com alvo vazio)."
+      ],
+      "ok": true,
+      "title": "Travoes (links, doc e knudge na CI)"
     }
   ]
 }

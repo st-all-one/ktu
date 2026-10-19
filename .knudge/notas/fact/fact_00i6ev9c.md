@@ -1,0 +1,10 @@
+---
+id: fact_00i6ev9c
+type: fact
+statement: "F1 fechada: steering duravel e idempotente (M7) - admissao no log, entrega no passo seguinte, dedup por id"
+created_at: 2026-10-18T14:00:55.046Z
+body_hash: 3062aacc
+schema_version: 2
+anchors: [crates/ktu-core/src/agent/steering.rs, crates/ktu-core/src/session/mod.rs, crates/ktu-port/src/host.rs, crates/ktu-cli/src/repl.rs, xtask/src/gates/steering.rs]
+---
+F1 (task_00ly3qez, epic_00j1cgo3). Kernel: Event::SteerQueued { id, text } (admissao) e Event::Steer { id, text } (entrega); SessionLog::{pending_steers, knows_steer}; derive_messages descarta um Steer cujo id ja apareceu e nunca projeta SteerQueued (model-visible <=> logged); compact resume so o entregue. Porta Steering::take() -> Vec<SteerMessage> (id+texto). Novo crates/ktu-core/src/agent/steering.rs (extraido de agent/mod.rs por limite de 400 linhas) faz DUAS fases por fronteira: (1) entrega o que ja estava admitido - inclui o que veio de um log retomado; (2) admite o que chegou agora. Semantica: a mensagem entra no passo SEGUINTE ao da admissao (e, se o turno acabar antes, no turno seguinte - o follow-up) - e o preco da admissao duravel. O id vem da BORDA (o kernel nao gera ids - I6): Host::steer(session_id, id, text) em ktu-port (host/port/channel/http); a fila do Handle deduplica por id; o REPL gera repl-<n> (contador da sessao, unico entre turnos) e o servidor http-<n> quando o cliente nao envia nenhum (POST /v1/session/{id}/steer {id?, text}). Testes: 3 no kernel (pending/dedup projecao/dedup fila), 1 de loop (a_pending_steer_is_delivered_in_the_next_turn), 1 de REPL (a_line_during_a_turn_is_admitted_and_delivered_next_time, 2 arranques na mesma sessao) e 1 de porta HTTP (http_steering_is_admitted_once_per_id, com fresh_root por tag). Gate G16 verde 9/9 (wiki/gates/G16-steering.md): admissao antes da entrega, entrega no turno seguinte, exactamente uma vez em 3 corridas, I1/I2 limpos, e os testes de idempotencia por id arquivados. Limite assumido: a admissao e gravada na fronteira do loop (o kernel nao tem I/O; quem grava o log e o actor), logo a janela coberta e admissao registada -> morte antes da entrega.

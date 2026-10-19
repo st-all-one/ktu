@@ -7,6 +7,7 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -122,6 +123,9 @@ struct TurnRequest {
 /// Pedido de *steering*.
 #[derive(Deserialize)]
 struct SteerRequest {
+    /// Identificador da mensagem (idempotência — M7); ausente ⇒ gerado na borda.
+    #[serde(default)]
+    id: Option<String>,
     /// Texto entregue ao modelo.
     text: String,
 }
@@ -177,13 +181,26 @@ async fn cancel(State(hub): State<Hub>, Path(id): Path<String>) -> Result<Status
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Contador dos ids de *steering* gerados pelo servidor (sem `id` no pedido).
+///
+/// O id pertence à **borda** (o kernel não gera ids — I6); um cliente que queira
+/// idempotência envia o seu.
+fn next_steer_seq() -> u64 {
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    SEQ.fetch_add(1, Ordering::Relaxed)
+}
+
 /// `POST /v1/session/{id}/steer` — entrega uma mensagem ao turno em curso.
 async fn steer(
     State(hub): State<Hub>,
     Path(id): Path<String>,
     Json(request): Json<SteerRequest>,
 ) -> Result<StatusCode, ApiError> {
-    hub.steer(&id, &request.text).await?;
+    let steer_id = request
+        .id
+        .clone()
+        .unwrap_or_else(|| format!("http-{}", next_steer_seq()));
+    hub.steer(&id, &steer_id, &request.text).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

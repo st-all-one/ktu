@@ -39,8 +39,8 @@ impl Port for Channel {
         self.host.cancel(session_id).await
     }
 
-    async fn steer(&self, session_id: &str, text: &str) -> Result<(), PortError> {
-        self.host.steer(session_id, text).await
+    async fn steer(&self, session_id: &str, id: &str, text: &str) -> Result<(), PortError> {
+        self.host.steer(session_id, id, text).await
     }
 
     async fn set_mode(
@@ -106,7 +106,7 @@ mod tests {
             Ok(())
         }
 
-        async fn steer(&self, _session_id: &str, _text: &str) -> Result<(), PortError> {
+        async fn steer(&self, _session_id: &str, _id: &str, _text: &str) -> Result<(), PortError> {
             Ok(())
         }
 
@@ -122,6 +122,7 @@ mod tests {
 
         async fn state(&self, session_id: &str) -> Result<SessionState, PortError> {
             Ok(SessionState {
+                keep_from: None,
                 session_id: session_id.to_owned(),
                 mode: *self.mode.lock().unwrap_or_else(PoisonError::into_inner),
                 pending: false,
@@ -162,7 +163,7 @@ mod tests {
 
         port.set_mode("s1", Mode::Plan, Approval::Pending).await?;
         assert_eq!(port.state("s1").await?.mode, Mode::Plan);
-        port.steer("s1", "faz antes isto").await?;
+        port.steer("s1", "s1", "faz antes isto").await?;
         Ok(())
     }
 }

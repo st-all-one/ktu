@@ -10,14 +10,14 @@ use clap::{Parser, Subcommand};
 
 pub(crate) use crate::actions::{
     AgentsAction, CommandsAction, ConfigAction, GuardrailsAction, MemoryAction, PermissionAction,
-    PluginsAction, ProvidersAction, SelfAction, SessionAction, TrashAction,
+    PluginsAction, ProvidersAction, SelfAction, SessionAction, SkillsAction, TrashAction,
 };
 
 /// Rodapé da ajuda: as **áreas** do CLI e o ciclo (estilo `kd`).
 const AFTER_HELP: &str = "\
 ÁREAS:
   CONVERSA      run · session
-  CONHECIMENTO  memory · guardrails · permission · commands · agents · plugins · trash
+  CONHECIMENTO  memory · guardrails · permission · commands · skills · agents · plugins · trash
   PROJECTO      init · doctor · mode · prompt
   SISTEMA       prime · self · providers
   PORTA         serve · tui
@@ -172,6 +172,12 @@ pub(crate) enum Command {
         #[command(subcommand)]
         action: CommandsAction,
     },
+    /// Inspecciona as skills declarativas (`.agents/skills/` + as globais).
+    Skills {
+        /// Acção sobre as skills.
+        #[command(subcommand)]
+        action: SkillsAction,
+    },
     /// Inspecciona os agentes declarativos (`.agents/agents/*.md`).
     Agents {
         /// Acção sobre os agentes.
@@ -209,7 +215,7 @@ pub(crate) enum Command {
         action: TrashAction,
     },
     // ── PROJECTO ────────────────────────────────────────────────────────────
-    /// Prepara o ambiente do projecto (layout, skill, git, `AGENTS.md`) — idempotente.
+    /// Prepara o ambiente do projecto (layout, skill, config, git) — idempotente.
     Init {
         /// Reescreve os ficheiros gerados (skill, config); nunca a memória.
         #[arg(long)]
@@ -230,14 +236,11 @@ pub(crate) enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
-    /// Diagnostica o layout e o conhecimento do projecto.
+    /// Diagnostica o projecto (layout e skill) e diz o que falta, com o remédio.
     Doctor {
         /// *Root* do projecto (por omissão, o directório actual).
         #[arg(long)]
         root: Option<PathBuf>,
-        /// Diagnostica a memória (âncoras quebradas, saúde do índice).
-        #[arg(long)]
-        memory: bool,
     },
     /// Muda o modo da sessão (`SetMode`) — sempre logado e sobrevive a `resume` (I15).
     Mode {

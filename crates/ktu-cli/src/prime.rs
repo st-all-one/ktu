@@ -51,7 +51,8 @@ GUARDRAILS: `.agents/guardrails/*.md` (fail-closed). Toda decisão é evidência
 
 CONTEXTO: um só dono do tecto (BudgetGate); a instrução do utilizador nunca cai.
 
-CONVENÇÕES: `.agents/` = conhecimento (versionável) · `.ktu/` = runtime · `AGENTS.md` = router.
+CONVENÇÕES: `.agents/` = conhecimento (versionável) · `.ktu/` = runtime · `AGENTS.md` =
+  instruções do projecto (escritas por ti; o ktu só lê).
   Instruções por directório: `AGENTS.md` na raiz e aninhados (entram no prompt, raiz primeiro;
   o mais próximo vem depois). Directriz: `.agents/SYSTEM.md` substitui a base do agente e
   `.agents/APPEND_SYSTEM.md` acrescenta-lhe (`<global>/SYSTEM.md` é o nível do utilizador; o

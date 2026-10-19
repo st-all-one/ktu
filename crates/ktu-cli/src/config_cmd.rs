@@ -12,6 +12,7 @@ use std::process::ExitCode;
 use ktu_core::config::{self, Auth, Config};
 
 use crate::cli::ConfigAction;
+use crate::config_doctor;
 use crate::output::{self, Format};
 
 /// Âmbito de uma operação de config.
@@ -26,7 +27,7 @@ pub(crate) enum Scope {
 }
 
 impl Scope {
-    const fn label(self) -> &'static str {
+    pub(crate) const fn label(self) -> &'static str {
         match self {
             Self::Effective => "effective",
             Self::Local => "local",
@@ -83,6 +84,7 @@ pub(crate) fn run(scope: Scope, action: ConfigAction, format: Format) -> ExitCod
         ConfigAction::Get { key } => get(scope, &key, format),
         ConfigAction::Set { key, value } => set(scope, &key, &value, format),
         ConfigAction::Unset { key } => unset(scope, &key, format),
+        ConfigAction::Doctor => config_doctor::doctor(scope, format),
     }
 }
 
@@ -144,7 +146,7 @@ fn set(scope: Scope, key: &str, value: &str, format: Format) -> ExitCode {
         Ok(path) => path,
         Err(message) => return fail(format, "config set", &message),
     };
-    let mut config = match read_config(&path) {
+    let mut config = match read_for_edit(&path) {
         Ok(config) => config,
         Err(message) => return fail(format, "config set", &message),
     };
@@ -169,7 +171,7 @@ fn unset(scope: Scope, key: &str, format: Format) -> ExitCode {
         Ok(path) => path,
         Err(message) => return fail(format, "config unset", &message),
     };
-    let mut config = match read_config(&path) {
+    let mut config = match read_for_edit(&path) {
         Ok(config) => config,
         Err(message) => return fail(format, "config unset", &message),
     };
@@ -254,15 +256,44 @@ fn editable_path(scope: Scope, root: &Path) -> Result<PathBuf, String> {
 }
 
 /// Lê o `config.toml` em `path` (ausente ⇒ default).
+///
+/// A leitura **migra em memória** ([`config::read_migrate`], não destrutiva): um
+/// ficheiro v0 é interpretado como v1 sem ser reescrito, e uma versão futura é erro
+/// (fail-closed).
 fn read_config(path: &Path) -> Result<Config, String> {
     if !path.is_file() {
         return Ok(Config::default());
     }
-    Config::parse(&read_text(path)?)
+    let table = config::table(&read_text(path)?)?;
+    Config::from_table(config::read_migrate(table)?)
+}
+
+/// Lê o `config.toml` para **editar**: migra (variante de escrita, que pode retirar
+/// chaves obsoletas) e avisa em `stderr` quando o ficheiro muda — migração silenciosa
+/// não existe.
+fn read_for_edit(path: &Path) -> Result<Config, String> {
+    if !path.is_file() {
+        return Ok(Config::default());
+    }
+    let table = config::table(&read_text(path)?)?;
+    let before = config::schema_of(&table);
+    let (migrated, changed) = config::migrate(table)?;
+    if changed {
+        output::warn(&format!(
+            "config migrada do schema v{before} para v{}: {}",
+            config::SCHEMA,
+            path.display()
+        ));
+    }
+    Config::from_table(migrated)
 }
 
 /// Escreve o config em `path` (cria os directórios).
+///
+/// Escrever é **carimbar a versão**: o ficheiro sai sempre com `schema` actual.
 fn write_config(path: &Path, config: &Config) -> Result<(), String> {
+    let mut config = config.clone();
+    config.schema = Some(config::SCHEMA);
     let text = config.render()?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
@@ -271,7 +302,7 @@ fn write_config(path: &Path, config: &Config) -> Result<(), String> {
 }
 
 /// Lê um ficheiro como texto.
-fn read_text(path: &Path) -> Result<String, String> {
+pub(crate) fn read_text(path: &Path) -> Result<String, String> {
     let bytes = fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
     Ok(String::from_utf8_lossy_owned(bytes))
 }
@@ -282,7 +313,7 @@ fn env_str(key: &str) -> Option<String> {
 }
 
 /// Caminho do `config.toml` global, se houver `HOME`/`XDG_CONFIG_HOME`.
-fn global_path() -> Option<PathBuf> {
+pub(crate) fn global_path() -> Option<PathBuf> {
     config::global_config_path(
         env_str("XDG_CONFIG_HOME").as_deref(),
         env_str("HOME").as_deref(),
@@ -315,7 +346,7 @@ fn read_auth(path: &Path) -> Result<Auth, String> {
 }
 
 /// Directório actual (vazio se indisponível).
-fn cwd() -> PathBuf {
+pub(crate) fn cwd() -> PathBuf {
     env::current_dir().unwrap_or_default()
 }
 

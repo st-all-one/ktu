@@ -1,0 +1,10 @@
+---
+id: fact_01ow3tzn
+type: fact
+statement: F2 fechada excepto a Tab: comandos / do REPL (compact/fork/memory/resume) e Ctrl-C que cancela sem matar; gate G17 verde
+created_at: 2026-10-18T14:25:15.571Z
+body_hash: 3fd73ff9
+schema_version: 2
+anchors: [crates/ktu-cli/src/repl_slash.rs, crates/ktu-cli/src/hub/actor.rs, crates/ktu-port/src/protocol.rs, xtask/src/gates/repl.rs]
+---
+F2 (task_01mrz94g, epic_00j1cgo3). Comandos /: novo crates/ktu-cli/src/repl_slash.rs (apply + Switch) delega tudo - /compact -> Cmd::Compact no actor (force_compaction + persist do log + checkpoint com keep_from), /fork -> session_cmd::copy (extraido de fork; copia byte-a-byte), /memory -> memory_cmd::list_text (extraido de list; escreve em stderr), /resume -> hub.create_session + subscribe + state (muda de sessao no loop do REPL). /help actualizado; slash.rs ganhou Compact/Fork/Memory/Resume. SessionState ganhou keep_from (Option<usize>, nao bool: max-struct-bools=1) - o corte e observavel na porta e o /compact grava o MESMO corte que --compact (check 6 do G17). O corte e restaurado do checkpoint ao retomar (hub::start_session). Ctrl-C: tarefa de borda com tokio::signal::ctrl_c() (feature signal adicionada ao tokio) -> hub.cancel(id); o processo NAO morre e o turno fecha StopReason::Cancelled; o id e lido a cada sinal porque /resume muda de sessao. Bug corrigido: o /compact gravava o checkpoint com o id do RunConfig (o do front), nao o id da sessao do actor -> session_store::save_checkpoint_for(fs, dir, id, log, clock). Testes: 1 unit (slash) + 5 integracao em tests/repl_commands.rs (help, memory, fork+resume, compact, ctrl-c com plugin lento + kill -INT) + 1 no hub (compact persistido e restaurado). Gate G17 verde 10/10 (wiki/gates/G17-repl.md). 403 testes no workspace. Tab ADIADA (task_002em5xu).

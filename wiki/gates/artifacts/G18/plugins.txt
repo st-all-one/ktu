@@ -1,0 +1,4 @@
+geracao 1
+g1	global
+g2	global
+g1	local

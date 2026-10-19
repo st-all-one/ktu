@@ -13,7 +13,7 @@ agent: goose
 
 # GOOSE_EPIC — Reimplementação do knudge em TypeScript
 
-> **Base:** [`GOOSE_RESEARCH.md`](./GOOSE_RESEARCH.md) (síntese técnica de `knudge v0.5.2`, commit `2ef623c`).
+> **Base:** `GOOSE_RESEARCH.md` (não versionado) (síntese técnica de `knudge v0.5.2`, commit `2ef623c`).
 > **Objetivo:** especificar a reimplementação do knudge em **TypeScript**, com **plano mestre**, **issues encadeadas sequencialmente** e análise honesta de **vantagens e desvantagens**.
 > **Autor:** goose 🪿
 

@@ -5,6 +5,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
+use ktu_core::Origin;
 use ktu_core::plugin::{HookPayload, Hooks, Plugin, PluginVerdict};
 use ktu_plugin::{Manifest, PluginHost, ProcessPlugin};
 
@@ -163,5 +164,35 @@ async fn the_repo_examples_transform_and_gate() -> Result<(), String> {
         arguments: r#"{"command":"ls"}"#.to_owned(),
     };
     assert_eq!(gate.handle(&safe).await, PluginVerdict::Pass);
+    Ok(())
+}
+
+/// Os dois níveis são **aditivos** (M8): o mesmo nome nos dois corre duas vezes.
+#[tokio::test]
+async fn global_and_project_plugins_are_additive() -> Result<(), String> {
+    let root = temp_dir("layered");
+    let _ignored = fs::remove_dir_all(&root);
+    let global = root.join("global");
+    let project = root.join("project");
+    let _g1 = write_plugin(&global, "g1", "observe", 2000, PASS_SCRIPT)?;
+    let _g2 = write_plugin(&global, "g2", "observe", 2000, PASS_SCRIPT)?;
+    let _l1 = write_plugin(&project, "g1", "observe", 2000, PASS_SCRIPT)?;
+
+    let host = PluginHost::layered(vec![(Origin::Global, global), (Origin::Local, project)]);
+    assert!(host.errors().is_empty(), "{:?}", host.errors());
+    // Global primeiro, por ordem de nome; o projecto depois (não desliga o global).
+    assert_eq!(
+        host.entries(),
+        vec![
+            ("g1".to_owned(), Origin::Global),
+            ("g2".to_owned(), Origin::Global),
+            ("g1".to_owned(), Origin::Local),
+        ]
+    );
+    // Os três despacham (aditivo, não substituição).
+    let mut payload = input("oi");
+    assert!(host.dispatch(&mut payload).await.allowed);
+    assert_eq!(host.names(), vec!["g1", "g2", "g1"]);
+    let _ignored = fs::remove_dir_all(&root);
     Ok(())
 }

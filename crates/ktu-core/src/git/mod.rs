@@ -4,7 +4,6 @@
 //! exclusão vive em `.git/info/exclude` e as regras em `.gitattributes`. Os blocos
 //! são delimitados por marcadores e cada operação é **idempotente**.
 
-pub mod agents;
 pub mod attributes;
 pub mod block;
 pub mod exclude;

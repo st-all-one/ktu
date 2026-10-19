@@ -60,6 +60,17 @@ pub(crate) enum CommandsAction {
     },
 }
 
+/// Acções de `ktu skills` (skills declarativas em `.agents/skills/`).
+#[derive(Debug, Subcommand)]
+pub(crate) enum SkillsAction {
+    /// Lista as skills efectivas (global + projecto, com a origem).
+    Ls {
+        /// *Root* do projecto (por omissão, o directório actual).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+}
+
 /// Acções de `ktu permission`.
 #[derive(Debug, Subcommand)]
 pub(crate) enum PermissionAction {
@@ -161,6 +172,8 @@ pub(crate) enum ConfigAction {
         /// Chave.
         key: String,
     },
+    /// Diagnostica o schema (versão, migração pendente) — **sem escrever**.
+    Doctor,
 }
 
 /// Acções de `ktu memory`.
@@ -189,6 +202,12 @@ pub(crate) enum MemoryAction {
         /// Destino do JSONL derivado (por omissão, `.agents/memory/session-log.jsonl`).
         #[arg(long)]
         out: Option<PathBuf>,
+    },
+    /// Diagnostica a memória (âncoras quebradas, saúde do índice) — read-only.
+    Doctor {
+        /// *Root* do projecto (por omissão, o directório actual).
+        #[arg(long)]
+        root: Option<PathBuf>,
     },
     /// Drena a fila derivada de embeddings e gere o worker (`service`).
     Drain {

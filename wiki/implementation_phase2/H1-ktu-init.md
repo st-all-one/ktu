@@ -4,15 +4,17 @@
 > **Desenho:** [cli-e-config](../cli-e-config.md) §4 · **Pré-requisitos:** H0.
 
 ## Objetivo
-Preparar **todo** o ambiente do projecto de forma **idempotente**: layout, skill do ktu, bloco no
-`AGENTS.md`, git gerido (`.git/info/exclude` + `.gitattributes`), `--force`/`--git-excluded`.
+Preparar **todo** o ambiente do projecto de forma **idempotente**: layout, config e
+git gerido (`.git/info/exclude` + `.gitattributes`), `--force`/`--git-excluded`. O `AGENTS.md`
+**não** é tocado (o ficheiro é do projecto — [ADR 0021](../adr/0021-o-init-nao-escreve-no-agents-md.md)).
 
 ## Passos
 1. **Blocos idempotentes** — `upsert` que casa a **linha inteira** (após `trim`); marcadores
-   `<!-- ktu:start -->`/`<!-- ktu:end -->` + `<!-- ktu:version: N -->` (AGENTS.md) e
    `# ktu:start`/`# ktu:end` (`.gitattributes`).
 2. **Layout + skill + template** — `.agents/` (skills/guardrails/memory/recipes) + `.ktu/`
-   (sessions/plugins/trash/plan/logs); `.agents/skills/ktu/SKILL.md`; `.agents/config.toml`.
+   (sessions/plugins/trash/plan/logs); `.agents/config.toml`. O ktu **não** gera conteúdo sobre si
+   próprio (skill/bloco no `AGENTS.md`): as convenções vivem na base do prompt e o protocolo é o
+   `ktu prime` (ADR 0021/0022).
 3. **Git gerido** — `.git/info/exclude` (modo `--git-tracked` exclui só o derivado;
    `--git-excluded` exclui tudo) com reversão ao mudar de modo; `.gitattributes` (`eol=lf`,
    `merge=union` no log, `binary` no derivado). **Nunca** `.gitignore` (D30).
@@ -30,7 +32,7 @@ Preparar **todo** o ambiente do projecto de forma **idempotente**: layout, skill
 - Reexecutar `ktu init` **não** duplica nem reescreve blocos.
 - `.git/info/exclude` reverte ao alternar `--git-tracked`/`--git-excluded`.
 - Fora de repo git: no-op (não falha). `--force` não apaga memória.
-- `AGENTS.md`/`.gitattributes` com os marcadores correctos (golden).
+- `.gitattributes`/`.git/info/exclude` com os marcadores correctos (golden).
 
 ## Riscos
 - `--force` a apagar conhecimento → **só** reescreve ficheiros geridos.

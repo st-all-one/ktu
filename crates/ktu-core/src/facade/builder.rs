@@ -6,7 +6,7 @@ use super::{Ktu, system_prompt_in};
 use crate::agent::{AgentRegistry, AgentSpec, LoopConfig, Steering};
 use crate::budget::BudgetGate;
 use crate::cancel::CancelToken;
-use crate::guardrails::{self, DeclarativeGuard};
+use crate::guardrails::DeclarativeGuard;
 use crate::memory::Memory;
 use crate::permission::{self, PermissionGuard};
 use crate::plugin::Hooks;
@@ -182,16 +182,7 @@ impl<'a> KtuBuilder<'a> {
         // Guardrails **globais** primeiro (piso aditivo, M5): a cadeia só consulta a
         // regra seguinte se a anterior deixar passar, pelo que um ficheiro do projecto
         // nunca desliga uma regra global — só pode acrescentar.
-        let mut rules = match self.user_dir {
-            Some(dir) => guardrails::load(fs, &dir.join("guardrails")).map_err(|error| {
-                Error::invalid(format!("guardrails globais invalidos: {error}"))
-            })?,
-            None => Vec::new(),
-        };
-        rules.extend(
-            guardrails::load(fs, &root.join(".agents").join("guardrails"))
-                .map_err(|error| Error::invalid(format!("guardrails invalidos: {error}")))?,
-        );
+        let rules = super::declarative_rules(fs, &root, self.user_dir)?;
         let permissions = permission::load(fs, &root)
             .map_err(|error| Error::invalid(format!("erro nas permissoes: {error}")))?;
         let system = system_prompt_in(fs, &root, self.user_dir);

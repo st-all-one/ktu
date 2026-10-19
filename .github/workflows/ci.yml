@@ -19,12 +19,27 @@ jobs:
           toolchain: 1.99
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Portão único (fmt + clippy -D warnings + test + firewall + tamanho)
+      - name: Portão único (fmt + clippy + test + firewall + links + doc + tamanho)
         run: make check
-      - name: Gates da Fase 2 (G10–G15, determinísticos)
+      - name: Gates das Fases 2 e 3 (G10–G19 e G22, determinísticos)
         run: make gates
       - name: Métricas por função (feature instrument)
         run: cargo test -p ktu-core --features instrument
+
+  knudge:
+    name: knudge (workspace próprio, excluído da raiz)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/knudge
+      - name: Portão do knudge (fmt + clippy -D warnings + test + tamanho 300)
+        run: make check-knudge
 
   msrv:
     name: MSRV (rust-version = 1.99)
